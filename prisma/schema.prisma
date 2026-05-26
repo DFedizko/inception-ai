@@ -1,0 +1,53 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Conversation {
+  id          String    @id
+  title       String
+  instruction String?
+  createdAt   DateTime  @map("created_at")
+  messages    Message[]
+
+  @@map("conversations")
+}
+
+model Message {
+  id             String           @id
+  conversationId String           @map("conversation_id")
+  conversation   Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String
+  type           String
+  createdAt      DateTime         @map("created_at")
+  position       Int
+  contents       MessageContent[]
+
+  @@index([conversationId, position])
+  @@map("messages")
+}
+
+model MessageContent {
+  id            String   @id
+  messageId     String   @map("message_id")
+  message       Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  position      Int
+  kind          String
+  text          String?
+  uri           String?
+  mimeType      String?  @map("mime_type")
+  durationMs    Int?     @map("duration_ms")
+  width         Int?
+  height        Int?
+  videoStatus   String?  @map("video_status")
+  videoPrompt   String?  @map("video_prompt")
+  videoFailure  String?  @map("video_failure")
+  createdAt     DateTime @map("created_at")
+
+  @@index([messageId, position])
+  @@map("message_contents")
+}

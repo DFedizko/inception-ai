@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+@theme {
+  --color-base: hsl(240 14% 9%);
+  --color-panel: hsl(240 13% 13%);
+  --color-raised: hsl(240 12% 17%);
+  --color-line: hsl(240 10% 24%);
+
+  --color-accent: hsl(256 82% 68%);
+  --color-accent-ink: hsl(256 60% 14%);
+
+  --color-success: hsl(151 58% 55%);
+  --color-success-ink: hsl(151 55% 11%);
+  --color-danger: hsl(356 74% 63%);
+  --color-danger-ink: hsl(356 58% 12%);
+  --color-warn: hsl(38 90% 60%);
+  --color-warn-ink: hsl(38 68% 11%);
+  --color-info: hsl(256 82% 68%);
+  --color-info-ink: hsl(256 60% 14%);
+
+  --color-ink: hsl(240 18% 95%);
+  --color-ink-muted: hsl(240 9% 64%);
+}
+
+:root {
+  --voice-orb-stop-1: #5be7ff;
+  --voice-orb-stop-2: #6d6bff;
+  --voice-orb-stop-3: #a06bff;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background-color: var(--color-base);
+  color: var(--color-ink);
+}
+
+button:not(:disabled),
+[role="combobox"]:not(:disabled),
+[role="option"]:not([aria-disabled="true"]) {
+  cursor: pointer;
+}
+
+button:disabled,
+[role="combobox"]:disabled,
+[role="option"][aria-disabled="true"] {
+  cursor: not-allowed;
+}

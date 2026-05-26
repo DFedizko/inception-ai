@@ -1,0 +1,276 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background-color: hsl(240 14% 4% / 0.6);
+  backdrop-filter: blur(2px);
+}
+
+.backdrop-in {
+  animation: backdrop-in 0.25s ease forwards;
+}
+
+.backdrop-out {
+  animation: backdrop-out 0.25s ease forwards;
+}
+
+@keyframes backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes backdrop-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.panel {
+  position: relative;
+  display: flex;
+  max-height: 90vh;
+  width: 100%;
+  flex-direction: column;
+  overflow: hidden;
+  transform-origin: center;
+  will-change: transform, opacity;
+}
+
+/* fade — quiet, dependable */
+.fade-in {
+  animation: fade-in 0.24s ease forwards;
+}
+.fade-out {
+  animation: fade-out 0.2s ease forwards;
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* scale — zoom in with a soft overshoot */
+.scale-in {
+  animation: scale-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.scale-out {
+  animation: scale-out 0.2s ease-in forwards;
+}
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes scale-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+}
+
+/* slide-up — bottom sheet feel */
+.slide-up-in {
+  animation: slide-up-in 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.slide-up-out {
+  animation: slide-up-out 0.24s ease-in forwards;
+}
+@keyframes slide-up-in {
+  from {
+    opacity: 0;
+    transform: translateY(40px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes slide-up-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+}
+
+/* drawer-right — slides in from the right edge */
+.drawer-right-in {
+  animation: drawer-right-in 0.34s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.drawer-right-out {
+  animation: drawer-right-out 0.26s ease-in forwards;
+}
+@keyframes drawer-right-in {
+  from {
+    opacity: 0.4;
+    transform: translateX(110%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes drawer-right-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(110%);
+  }
+}
+
+/* flip — 3D rotateX, like a sheet of paper flipping down */
+.flip-in {
+  animation: flip-in 0.42s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+.flip-out {
+  animation: flip-out 0.3s ease-in forwards;
+}
+@keyframes flip-in {
+  from {
+    opacity: 0;
+    transform: perspective(1400px) rotateX(-75deg);
+    transform-origin: top center;
+  }
+  to {
+    opacity: 1;
+    transform: perspective(1400px) rotateX(0deg);
+    transform-origin: top center;
+  }
+}
+@keyframes flip-out {
+  from {
+    opacity: 1;
+    transform: perspective(1400px) rotateX(0deg);
+    transform-origin: top center;
+  }
+  to {
+    opacity: 0;
+    transform: perspective(1400px) rotateX(70deg);
+    transform-origin: top center;
+  }
+}
+
+/* swing — swings in like a door on a hinge */
+.swing-in {
+  animation: swing-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+.swing-out {
+  animation: swing-out 0.3s ease-in forwards;
+}
+@keyframes swing-in {
+  from {
+    opacity: 0;
+    transform: perspective(1600px) rotateY(-90deg);
+    transform-origin: left center;
+  }
+  to {
+    opacity: 1;
+    transform: perspective(1600px) rotateY(0deg);
+    transform-origin: left center;
+  }
+}
+@keyframes swing-out {
+  from {
+    opacity: 1;
+    transform: perspective(1600px) rotateY(0deg);
+    transform-origin: left center;
+  }
+  to {
+    opacity: 0;
+    transform: perspective(1600px) rotateY(80deg);
+    transform-origin: left center;
+  }
+}
+
+/* genie — warps up out of a corner, playful */
+.genie-in {
+  animation: genie-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.genie-out {
+  animation: genie-out 0.32s ease-in forwards;
+}
+@keyframes genie-in {
+  0% {
+    opacity: 0;
+    transform: translate(-30%, 60%) scale(0.2) skewX(12deg);
+    transform-origin: bottom left;
+  }
+  60% {
+    opacity: 1;
+    transform: translate(0, -2%) scale(1.02) skewX(-2deg);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1) skewX(0deg);
+  }
+}
+@keyframes genie-out {
+  from {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+    transform-origin: bottom left;
+  }
+  to {
+    opacity: 0;
+    transform: translate(-30%, 60%) scale(0.2) skewX(12deg);
+    transform-origin: bottom left;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .backdrop-in,
+  .backdrop-out,
+  .fade-in,
+  .fade-out,
+  .scale-in,
+  .scale-out,
+  .slide-up-in,
+  .slide-up-out,
+  .drawer-right-in,
+  .drawer-right-out,
+  .flip-in,
+  .flip-out,
+  .swing-in,
+  .swing-out,
+  .genie-in,
+  .genie-out {
+    animation-duration: 0.01ms;
+  }
+}

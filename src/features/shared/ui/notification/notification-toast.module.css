@@ -1,0 +1,47 @@
+@keyframes slide {
+  from {
+    transform: translate(var(--enter-x, 0), var(--enter-y, 0));
+    opacity: 0;
+  }
+  to {
+    transform: translate(0, 0);
+    opacity: 1;
+  }
+}
+
+.fromRight {
+  --enter-x: calc(100% + 1.5rem);
+}
+
+.fromLeft {
+  --enter-x: calc(-100% - 1.5rem);
+}
+
+.fromTop {
+  --enter-y: calc(-100% - 1.5rem);
+}
+
+.fromBottom {
+  --enter-y: calc(100% + 1.5rem);
+}
+
+.enter {
+  animation: slide 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.leave {
+  animation: slide var(--leave-duration, 260ms) cubic-bezier(0.55, 0, 1, 0.45) reverse both;
+}
+
+@keyframes countdown {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+.progressBar {
+  animation: countdown var(--duration, 4000ms) linear forwards;
+}
