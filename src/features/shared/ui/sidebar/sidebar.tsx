@@ -6,7 +6,7 @@ type SidebarProps = {
 };
 
 export const Sidebar = ({ children, className }: SidebarProps) => (
-  <aside className={`flex h-dvh w-72 shrink-0 flex-col bg-panel ${className ?? ""}`}>
+  <aside className={`flex h-dvh w-60 shrink-0 flex-col bg-panel ${className ?? ""}`}>
     {children}
   </aside>
 );

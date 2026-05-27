@@ -14,7 +14,7 @@ export const ModalTitle = ({ children, showClose = true }: ModalTitleProps) => {
   const { close, titleId } = useModalContext();
 
   return (
-    <header className="flex items-center justify-between gap-4 border-b border-line px-5 py-4">
+    <header className="flex shrink-0 items-center justify-between gap-4 border-b border-line px-5 py-4">
       <h2 id={titleId} className="text-base font-semibold text-ink">
         {children}
       </h2>

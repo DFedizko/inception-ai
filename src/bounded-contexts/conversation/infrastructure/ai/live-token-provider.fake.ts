@@ -8,6 +8,7 @@ type FakeLiveTokenProviderOptions = {
 export class FakeLiveTokenProvider implements LiveTokenProvider {
   private readonly token: LiveToken;
   private readonly failure?: Error;
+  receivedInstruction: string | null | undefined;
 
   constructor(options: FakeLiveTokenProviderOptions = {}) {
     this.token = options.token ?? {
@@ -18,7 +19,8 @@ export class FakeLiveTokenProvider implements LiveTokenProvider {
     this.failure = options.failure;
   }
 
-  async mint(): Promise<LiveToken> {
+  async mint(instruction?: string | null): Promise<LiveToken> {
+    this.receivedInstruction = instruction;
     if (this.failure) {
       throw this.failure;
     }

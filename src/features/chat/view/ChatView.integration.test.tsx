@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
-import type { AiModel } from "../model/ai-model.model";
+import { UUID } from "@/features/shared/value-objects/uuid";
+import { AiModel } from "../model/ai-model.model";
 import type { Conversation } from "../model/conversation.model";
 import type { ConversationSummary } from "../model/conversation-summary.model";
+import { Message } from "../model/message.model";
 import type {
   ConversationGateway,
+  ReplyChunkConsumer,
   TurnInput,
 } from "../view-model/gateways/conversation.gateway";
 import { setConversationGateway } from "../view-model/gateways/conversation.gateway.provider";
@@ -22,9 +25,12 @@ import type {
 } from "../view-model/live/live-session.port";
 import { useChatStore } from "../view-model/stores/chat.store";
 import { useNotificationStore } from "@/features/shared/ui/notification";
+import { buildQueryWrapper } from "@/test/renderWithProviders";
 import { ChatView } from "./ChatView";
 
 const at = "2026-05-25T10:00:00.000Z";
+const conversationId = UUID.create("c1c1c1c1-c1c1-4c1c-8c1c-c1c1c1c1c1c1");
+const mid = () => UUID.create(crypto.randomUUID());
 
 const recordedTurns: TurnInput[][] = [];
 const liveSpy: {
@@ -56,20 +62,20 @@ type FakeOptions = { chunks: string[]; failAfterFirstChunk?: boolean };
 const fakeGateway = (options: FakeOptions): ConversationGateway => {
   let conversations: ConversationSummary[] = [];
   const conversation: Conversation = {
-    id: "c1",
+    id: conversationId,
     title: "Nova conversa",
     createdAt: at,
     instruction: null,
     messages: [],
   };
 
-  const streamReply = async function* () {
-    conversations = [{ id: "c1", title: "Sobre TDD", createdAt: at }];
-    let yielded = 0;
-    for (const chunk of options.chunks) {
-      yield chunk;
-      yielded += 1;
-      if (options.failAfterFirstChunk && yielded === 1) {
+  const streamReply = async (onReply: ReplyChunkConsumer) => {
+    conversations = [{ id: conversationId, title: "Sobre TDD", createdAt: at }];
+    let emitted = 0;
+    for (const text of options.chunks) {
+      onReply({ kind: "answer", text });
+      emitted += 1;
+      if (options.failAfterFirstChunk && emitted === 1) {
         throw new Error("stream broke");
       }
     }
@@ -78,26 +84,27 @@ const fakeGateway = (options: FakeOptions): ConversationGateway => {
   return {
     listConversations: async () => conversations,
     getConversation: async () => conversation,
-    beginConversation: async function* (content: string, onConversationId: (id: string) => void) {
+    beginConversation: async (
+      content: string,
+      onConversationId: (id: string) => void,
+      onReply: ReplyChunkConsumer,
+    ) => {
       conversation.messages = [
-        { id: "u0", role: "user", type: "text", content, createdAt: at },
+        new Message(mid(), "user", "text", content, at),
       ];
-      onConversationId("c1");
-      yield* streamReply();
+      onConversationId(conversationId.value);
+      await streamReply(onReply);
     },
     beginConversationWithTurns: async (turns: TurnInput[]) => {
       recordedTurns.push(turns);
-      conversation.messages = turns.map((turn, index) => ({
-        id: `t${index}`,
-        role: turn.role,
-        type: turn.type,
-        content: turn.content,
-        createdAt: at,
-      }));
-      conversations = [{ id: "c1", title: "Sobre voz", createdAt: at }];
+      conversation.messages = turns.map((turn) =>
+        new Message(mid(), turn.role, turn.type, turn.content, at),
+      );
+      conversations = [{ id: conversationId, title: "Sobre voz", createdAt: at }];
       return conversation;
     },
-    streamAssistantReply: streamReply,
+    streamAssistantReply: async (_id: string, _content: string, onReply: ReplyChunkConsumer) =>
+      streamReply(onReply),
     issueLiveToken: async () => ({
       token: "ephemeral",
       expiresAt: at,
@@ -107,15 +114,9 @@ const fakeGateway = (options: FakeOptions): ConversationGateway => {
       recordedTurns.push(turns);
       conversation.messages = [
         ...conversation.messages,
-        ...turns.map((turn, index) => ({
-          id: `t${conversation.messages.length + index}`,
-          role: turn.role,
-          type: turn.type,
-          content: turn.content,
-          createdAt: at,
-        })),
+        ...turns.map((turn) => new Message(mid(), turn.role, turn.type, turn.content, at)),
       ];
-      conversations = [{ id: "c1", title: "Sobre voz", createdAt: at }];
+      conversations = [{ id: conversationId, title: "Sobre voz", createdAt: at }];
       return conversation;
     },
     instructAgent: async (_id: string, instruction: string) => {
@@ -132,13 +133,8 @@ const fakeCatalog = (models: AiModel[]): ModelCatalogGateway => ({
   listModels: async () => models,
 });
 
-const textOnly: AiModel = { id: "text-1", label: "Modelo Texto", capabilities: ["text"], tier: "free" };
-const liveModel: AiModel = {
-  id: "live-1",
-  label: "Modelo Voz",
-  capabilities: ["text", "live"],
-  tier: "free",
-};
+const textOnly = new AiModel("text-1", "Modelo Texto", ["text"], "free");
+const liveModel = new AiModel("live-1", "Modelo Voz", ["text", "live"], "free");
 
 const installFakeLive = () => {
   const connector: LiveSessionConnector = {
@@ -194,6 +190,7 @@ const resetStore = () =>
   useChatStore.setState({
     conversations: [],
     activeConversationId: null,
+    openingConversationId: null,
     messages: [],
     isReplying: false,
     mode: "text",
@@ -202,6 +199,7 @@ const resetStore = () =>
     liveStatus: "idle",
     isListening: false,
     isSpeaking: false,
+    isMicMuted: false,
     userCaption: "",
     assistantCaption: "",
     activeInstruction: null,
@@ -248,7 +246,7 @@ describe("chat feature", () => {
 
   it("starts a conversation, streams the reply and refreshes the sidebar title", async () => {
     setConversationGateway(fakeGateway({ chunks: ["Olá", " mundo"] }));
-    render(<ChatView />);
+    render(<ChatView />, { wrapper: buildQueryWrapper() });
 
     startConversation();
     await screen.findByPlaceholderText("Escreva uma mensagem...");
@@ -262,7 +260,7 @@ describe("chat feature", () => {
 
   it("ignores a blank message", async () => {
     setConversationGateway(fakeGateway({ chunks: ["Olá"] }));
-    render(<ChatView />);
+    render(<ChatView />, { wrapper: buildQueryWrapper() });
 
     startConversation();
     await screen.findByPlaceholderText("Escreva uma mensagem...");
@@ -276,7 +274,7 @@ describe("chat feature", () => {
     setConversationGateway(
       fakeGateway({ chunks: ["Parci", "al"], failAfterFirstChunk: true }),
     );
-    render(<ChatView />);
+    render(<ChatView />, { wrapper: buildQueryWrapper() });
 
     startConversation();
     await screen.findByPlaceholderText("Escreva uma mensagem...");
@@ -289,14 +287,14 @@ describe("chat feature", () => {
 
   it("shows the empty state before any conversation is open", () => {
     setConversationGateway(fakeGateway({ chunks: [] }));
-    render(<ChatView />);
+    render(<ChatView />, { wrapper: buildQueryWrapper() });
 
     expect(screen.getByText(/Comece a conversa/)).toBeInTheDocument();
   });
 
   it("keeps voice disabled for a text model and enables it for a voice model", async () => {
     setConversationGateway(fakeGateway({ chunks: [] }));
-    render(<ChatView />);
+    render(<ChatView />, { wrapper: buildQueryWrapper() });
 
     startConversation();
     await waitFor(() => expect(useChatStore.getState().selectedModelId).toBe("text-1"));
@@ -312,7 +310,7 @@ describe("chat feature", () => {
   it("disables voice mode when no live-capable model exists", async () => {
     setModelCatalogGateway(fakeCatalog([textOnly]));
     setConversationGateway(fakeGateway({ chunks: [] }));
-    render(<ChatView />);
+    render(<ChatView />, { wrapper: buildQueryWrapper() });
 
     startConversation();
     await waitFor(() =>
@@ -324,7 +322,7 @@ describe("chat feature", () => {
 
   it("enters voice mode, auto-starts the session and shows the orb instead of the text input", async () => {
     setConversationGateway(fakeGateway({ chunks: [] }));
-    const { container } = render(<ChatView />);
+    const { container } = render(<ChatView />, { wrapper: buildQueryWrapper() });
 
     startConversation();
     await waitFor(() =>
@@ -346,7 +344,7 @@ describe("chat feature", () => {
 
   it("persists the conversation only after the first voice turn (not on voice entry)", async () => {
     setConversationGateway(fakeGateway({ chunks: [] }));
-    render(<ChatView />);
+    render(<ChatView />, { wrapper: buildQueryWrapper() });
 
     await waitFor(() => expect(useChatStore.getState().models.length).toBeGreaterThan(0));
     expect(useChatStore.getState().activeConversationId).toBeNull();
@@ -360,12 +358,12 @@ describe("chat feature", () => {
     liveSpy.callbacks?.onInputTranscript("olá");
     liveSpy.callbacks?.onTurnComplete();
 
-    await waitFor(() => expect(useChatStore.getState().activeConversationId).toBe("c1"));
+    await waitFor(() => expect(useChatStore.getState().activeConversationId).toBe(conversationId.value));
   });
 
   it("lets you instruct the agent on a draft, before starting a conversation", async () => {
     setConversationGateway(fakeGateway({ chunks: ["ok"] }));
-    render(<ChatView />);
+    render(<ChatView />, { wrapper: buildQueryWrapper() });
 
     expect(useChatStore.getState().activeConversationId).toBeNull();
 
@@ -382,10 +380,10 @@ describe("chat feature", () => {
 
   it("instructs the agent and reflects it on the active conversation", async () => {
     setConversationGateway(fakeGateway({ chunks: ["ok"] }));
-    render(<ChatView />);
+    render(<ChatView />, { wrapper: buildQueryWrapper() });
 
     typeAndSend("Oi", "Escreva uma mensagem...");
-    await waitFor(() => expect(useChatStore.getState().activeConversationId).toBe("c1"));
+    await waitFor(() => expect(useChatStore.getState().activeConversationId).toBe(conversationId.value));
 
     fireEvent.click(screen.getByRole("button", { name: "Instruir agente" }));
     const field = within(screen.getByRole("dialog")).getByRole("textbox");
@@ -402,10 +400,10 @@ describe("chat feature", () => {
 
   it("passes the agent instruction into the live voice session", async () => {
     setConversationGateway(fakeGateway({ chunks: ["ok"] }));
-    render(<ChatView />);
+    render(<ChatView />, { wrapper: buildQueryWrapper() });
 
     typeAndSend("Oi", "Escreva uma mensagem...");
-    await waitFor(() => expect(useChatStore.getState().activeConversationId).toBe("c1"));
+    await waitFor(() => expect(useChatStore.getState().activeConversationId).toBe(conversationId.value));
 
     fireEvent.click(screen.getByRole("button", { name: "Instruir agente" }));
     fireEvent.change(within(screen.getByRole("dialog")).getByRole("textbox"), {
@@ -422,7 +420,7 @@ describe("chat feature", () => {
 
   it("streams live captions and persists the completed voice turn", async () => {
     setConversationGateway(fakeGateway({ chunks: [] }));
-    render(<ChatView />);
+    render(<ChatView />, { wrapper: buildQueryWrapper() });
 
     startConversation();
     await waitFor(() =>
@@ -451,7 +449,7 @@ describe("chat feature", () => {
 
   it("sends typed text into the live session from the orb (text-to-voice)", async () => {
     setConversationGateway(fakeGateway({ chunks: [] }));
-    render(<ChatView />);
+    render(<ChatView />, { wrapper: buildQueryWrapper() });
 
     startConversation();
     await waitFor(() =>
@@ -468,7 +466,7 @@ describe("chat feature", () => {
 
   it("exits voice via the close button, returns to text mode and stops the session", async () => {
     setConversationGateway(fakeGateway({ chunks: [] }));
-    render(<ChatView />);
+    render(<ChatView />, { wrapper: buildQueryWrapper() });
 
     startConversation();
     await waitFor(() =>
@@ -487,7 +485,7 @@ describe("chat feature", () => {
 
   it("barges in: stops playback when the user starts speaking", async () => {
     setConversationGateway(fakeGateway({ chunks: [] }));
-    render(<ChatView />);
+    render(<ChatView />, { wrapper: buildQueryWrapper() });
 
     startConversation();
     await waitFor(() =>
@@ -507,7 +505,7 @@ describe("chat feature", () => {
 
   it("ends the session and stops the mic when the live socket closes (no loop)", async () => {
     setConversationGateway(fakeGateway({ chunks: [] }));
-    render(<ChatView />);
+    render(<ChatView />, { wrapper: buildQueryWrapper() });
 
     startConversation();
     await waitFor(() => expect(useChatStore.getState().selectedModelId).toBe("text-1"));
@@ -522,7 +520,7 @@ describe("chat feature", () => {
 
   it("shows a single error and stops the mic when the session errors repeatedly", async () => {
     setConversationGateway(fakeGateway({ chunks: [] }));
-    render(<ChatView />);
+    render(<ChatView />, { wrapper: buildQueryWrapper() });
 
     startConversation();
     await waitFor(() => expect(useChatStore.getState().selectedModelId).toBe("text-1"));
@@ -540,7 +538,7 @@ describe("chat feature", () => {
   it("flags an error when the live session fails to connect", async () => {
     liveSpy.failConnect = true;
     setConversationGateway(fakeGateway({ chunks: [] }));
-    render(<ChatView />);
+    render(<ChatView />, { wrapper: buildQueryWrapper() });
 
     startConversation();
     await waitFor(() =>
@@ -561,7 +559,7 @@ describe("chat feature", () => {
     setConversationGateway(
       fakeGateway({ chunks: ["Parci", "al"], failAfterFirstChunk: true }),
     );
-    render(<ChatView />);
+    render(<ChatView />, { wrapper: buildQueryWrapper() });
 
     startConversation();
     await screen.findByPlaceholderText("Escreva uma mensagem...");
@@ -574,7 +572,7 @@ describe("chat feature", () => {
   it("notifies when the live session fails to connect", async () => {
     liveSpy.failConnect = true;
     setConversationGateway(fakeGateway({ chunks: [] }));
-    render(<ChatView />);
+    render(<ChatView />, { wrapper: buildQueryWrapper() });
 
     startConversation();
     await waitFor(() => expect(useChatStore.getState().selectedModelId).toBe("text-1"));
@@ -591,7 +589,7 @@ describe("chat feature", () => {
       },
     });
     setConversationGateway(fakeGateway({ chunks: ["Olá"] }));
-    render(<ChatView />);
+    render(<ChatView />, { wrapper: buildQueryWrapper() });
 
     startConversation();
     await screen.findByPlaceholderText("Escreva uma mensagem...");
@@ -601,5 +599,43 @@ describe("chat feature", () => {
 
     typeAndSend("Oi", "Escreva uma mensagem...");
     expect(await screen.findByText("Oi")).toBeInTheDocument();
+  });
+
+  it("mutes the microphone: stops sending audio frames while muted, resumes when unmuted", async () => {
+    setConversationGateway(fakeGateway({ chunks: [] }));
+    render(<ChatView />, { wrapper: buildQueryWrapper() });
+
+    startConversation();
+    await waitFor(() => expect(useChatStore.getState().selectedModelId).toBe("text-1"));
+    goVoice();
+    await waitFor(() => expect(useChatStore.getState().liveStatus).toBe("live"));
+
+    micSpy.onFrame?.(Int16Array.from([1, 2, 3]));
+    expect(liveSpy.framesSent).toBe(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Silenciar microfone" }));
+    await waitFor(() => expect(useChatStore.getState().isMicMuted).toBe(true));
+    micSpy.onFrame?.(Int16Array.from([4, 5, 6]));
+    expect(liveSpy.framesSent).toBe(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Ativar microfone" }));
+    micSpy.onFrame?.(Int16Array.from([7]));
+    expect(liveSpy.framesSent).toBe(2);
+  });
+
+  it("captions both the user's speech and the AI's reply in the orb", async () => {
+    setConversationGateway(fakeGateway({ chunks: [] }));
+    render(<ChatView />, { wrapper: buildQueryWrapper() });
+
+    startConversation();
+    await waitFor(() => expect(useChatStore.getState().selectedModelId).toBe("text-1"));
+    goVoice();
+    await waitFor(() => expect(useChatStore.getState().liveStatus).toBe("live"));
+
+    liveSpy.callbacks?.onInputTranscript("quero café");
+    liveSpy.callbacks?.onOutputTranscript("claro, já preparo");
+
+    expect(await screen.findByText(/quero café/)).toBeInTheDocument();
+    expect(await screen.findByText("claro, já preparo")).toBeInTheDocument();
   });
 });

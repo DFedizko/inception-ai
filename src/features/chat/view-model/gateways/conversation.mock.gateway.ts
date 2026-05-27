@@ -1,10 +1,15 @@
+import { UUID } from "@/features/shared/value-objects/uuid";
+
 import type { Conversation } from "../../model/conversation.model";
 import type { ConversationSummary } from "../../model/conversation-summary.model";
-import type { Content } from "../../model/message.model";
+import { Message, type Content } from "../../model/message.model";
+
+const newId = (): UUID => UUID.create(crypto.randomUUID());
 import type { RecordedAudio } from "../audio/voice-recorder.ports";
 import type {
   ConversationGateway,
   LiveToken,
+  ReplyChunkConsumer,
   TurnInput,
 } from "./conversation.gateway";
 
@@ -34,51 +39,63 @@ export class MockConversationGateway implements ConversationGateway {
     return conversation;
   }
 
-  async *beginConversation(
+  async beginConversation(
     content: string,
     onConversationId: (conversationId: string) => void,
-  ): AsyncIterable<string> {
+    onReply: ReplyChunkConsumer,
+  ): Promise<void> {
     const conversation: Conversation = {
-      id: crypto.randomUUID(),
+      id: newId(),
       title: content.slice(0, 40),
       createdAt: new Date().toISOString(),
       instruction: null,
       messages: [
-        { id: `${crypto.randomUUID()}-0`, role: "user", type: "text", content, createdAt: new Date().toISOString() },
+        new Message(newId(), "user", "text", content, new Date().toISOString()),
       ],
     };
-    this.conversations.set(conversation.id, conversation);
-    onConversationId(conversation.id);
+    this.conversations.set(conversation.id.value, conversation);
+    onConversationId(conversation.id.value);
 
-    let assembled = "";
-    for (const word of this.pickReply(content).split(" ")) {
-      await this.wait(45);
-      assembled += `${word} `;
-      yield `${word} `;
-    }
+    const assembled = await this.streamWords(this.pickReply(content), onReply);
     conversation.messages = [
       ...conversation.messages,
-      { id: `${conversation.id}-1`, role: "assistant", type: "text", content: assembled.trim(), createdAt: new Date().toISOString() },
+      new Message(newId(), "assistant", "text", assembled, new Date().toISOString()),
     ];
   }
 
   async beginConversationWithTurns(turns: TurnInput[]): Promise<Conversation> {
     const conversation: Conversation = {
-      id: crypto.randomUUID(),
+      id: newId(),
       title: turns.find((turn) => turn.role === "user")?.content.slice(0, 40) ?? "Nova conversa",
       createdAt: new Date().toISOString(),
       instruction: null,
       messages: [],
     };
-    this.conversations.set(conversation.id, conversation);
-    return this.recordTurns(conversation.id, turns);
+    this.conversations.set(conversation.id.value, conversation);
+    return this.recordTurns(conversation.id.value, turns);
   }
 
-  async *streamAssistantReply(_conversationId: string, content: string): AsyncIterable<string> {
-    for (const word of this.pickReply(content).split(" ")) {
+  async streamAssistantReply(
+    _conversationId: string,
+    content: string,
+    onReply: ReplyChunkConsumer,
+  ): Promise<void> {
+    await this.streamWords(this.pickReply(content), onReply);
+  }
+
+  private async streamWords(reply: string, onReply: ReplyChunkConsumer): Promise<string> {
+    let assembled = "";
+    for (const word of reply.split(" ")) {
       await this.wait(45);
-      yield `${word} `;
+      assembled += this.emitWord(word, onReply);
     }
+    return assembled.trim();
+  }
+
+  private emitWord(word: string, onReply: ReplyChunkConsumer): string {
+    const text = `${word} `;
+    onReply({ kind: "answer", text });
+    return text;
   }
 
   async issueLiveToken(): Promise<LiveToken> {
@@ -94,13 +111,9 @@ export class MockConversationGateway implements ConversationGateway {
     const conversation = await this.getConversation(conversationId);
     conversation.messages = [
       ...conversation.messages,
-      ...turns.map((turn, index) => ({
-        id: `${conversationId}-${conversation.messages.length + index}`,
-        role: turn.role,
-        type: turn.type,
-        content: turn.content,
-        createdAt: new Date().toISOString(),
-      })),
+      ...turns.map((turn) =>
+        new Message(newId(), turn.role, turn.type, turn.content, new Date().toISOString()),
+      ),
     ];
     const firstUser = conversation.messages.find((message) => message.role === "user");
     if (conversation.title === "Nova conversa" && firstUser) {
@@ -115,7 +128,7 @@ export class MockConversationGateway implements ConversationGateway {
     return conversation;
   }
 
-  async generateImage(conversationId: string, prompt: string): Promise<Conversation> {
+  async generateImage(conversationId: string | null, prompt: string): Promise<Conversation> {
     await this.wait(120);
     return this.appendGeneration(conversationId, prompt, [
       { kind: "image", uri: placeholderImage(prompt), mimeType: "image/svg+xml" },
@@ -123,7 +136,7 @@ export class MockConversationGateway implements ConversationGateway {
   }
 
   async generateImageFromVoice(
-    conversationId: string,
+    conversationId: string | null,
     _audio: RecordedAudio,
   ): Promise<Conversation> {
     await this.wait(150);
@@ -132,7 +145,7 @@ export class MockConversationGateway implements ConversationGateway {
     ]);
   }
 
-  async generateVideo(conversationId: string, prompt: string): Promise<Conversation> {
+  async generateVideo(conversationId: string | null, prompt: string): Promise<Conversation> {
     await this.wait(180);
     return this.appendGeneration(conversationId, prompt, [
       {
@@ -146,34 +159,35 @@ export class MockConversationGateway implements ConversationGateway {
   }
 
   private async appendGeneration(
-    conversationId: string,
+    conversationId: string | null,
     prompt: string,
     assistantContents: Content[],
   ): Promise<Conversation> {
-    const conversation = await this.getConversation(conversationId);
-    const base = conversation.messages.length;
+    const conversation = conversationId
+      ? await this.getConversation(conversationId)
+      : this.begin(prompt);
     conversation.messages = [
       ...conversation.messages,
-      {
-        id: `${conversationId}-${base}`,
-        role: "user",
-        type: "text",
-        content: prompt,
-        contents: [{ kind: "text", text: prompt }],
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: `${conversationId}-${base + 1}`,
-        role: "assistant",
-        type: "text",
-        content: "",
-        contents: assistantContents,
-        createdAt: new Date().toISOString(),
-      },
+      new Message(newId(), "user", "text", prompt, new Date().toISOString(), [
+        { kind: "text", text: prompt },
+      ]),
+      new Message(newId(), "assistant", "text", "", new Date().toISOString(), assistantContents),
     ];
     if (conversation.title === "Nova conversa") {
       conversation.title = prompt.slice(0, 40);
     }
+    return conversation;
+  }
+
+  private begin(prompt: string): Conversation {
+    const conversation: Conversation = {
+      id: newId(),
+      title: prompt.slice(0, 40),
+      createdAt: new Date().toISOString(),
+      instruction: null,
+      messages: [],
+    };
+    this.conversations.set(conversation.id.value, conversation);
     return conversation;
   }
 

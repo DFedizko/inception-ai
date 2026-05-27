@@ -1,6 +1,6 @@
 import { container } from "@/bounded-contexts/conversation/di";
 import { ConversationController } from "@/bounded-contexts/conversation/presentation/controllers/conversation.controller";
-import { streamingTextResponse } from "../../../streaming-response";
+import { streamingReplyResponse } from "../../../streaming-response";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +11,7 @@ export const POST = async (request: Request, context: RouteContext): Promise<Res
   const body = await readJson(request);
   const controller = container.get(ConversationController);
 
-  return streamingTextResponse((onChunk) => controller.sendMessage(id, body, onChunk));
+  return streamingReplyResponse((onChunk) => controller.sendMessage(id, body, onChunk));
 };
 
 const readJson = async (request: Request): Promise<unknown> => {

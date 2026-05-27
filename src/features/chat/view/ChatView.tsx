@@ -1,29 +1,13 @@
-"use client";
-
 import { BaseLayout } from "@/features/shared/ui";
-import { useChatStore } from "../view-model/stores/chat.store";
-import { ConversationSidebar } from "./components/conversation-sidebar";
+import { ChatBody } from "./components/chat-body";
 import { ChatHeader } from "./components/chat-header";
-import { MessageList } from "./components/message-list";
-import { ChatComposer } from "./components/chat-composer";
-import { VoiceOrbStage } from "./components/voice-orb-stage";
+import { ConversationSidebar } from "./components/conversation-sidebar";
 
-export const ChatView = () => {
-  const { mode } = useChatStore();
-
-  return (
-    <BaseLayout sidebar={<ConversationSidebar />}>
-      <section className="mx-auto flex h-full w-full max-w-3xl flex-col">
-        <ChatHeader />
-        {mode === "voice" ? (
-          <VoiceOrbStage />
-        ) : (
-          <>
-            <MessageList />
-            <ChatComposer />
-          </>
-        )}
-      </section>
-    </BaseLayout>
-  );
-};
+export const ChatView = () => (
+  <BaseLayout sidebar={<ConversationSidebar />}>
+    <section className="mx-auto flex min-h-full w-full max-w-5xl flex-col">
+      <ChatHeader />
+      <ChatBody />
+    </section>
+  </BaseLayout>
+);

@@ -43,7 +43,11 @@ export class FetchHttpClient implements HttpClient {
     return this.request<TResponse>("DELETE", url, undefined, config);
   }
 
-  async *stream(url: string, config?: StreamConfig): AsyncIterable<Uint8Array> {
+  async stream(
+    url: string,
+    config: StreamConfig | undefined,
+    onChunk: (chunk: Uint8Array) => void,
+  ): Promise<void> {
     const response = await this.fetchFn(
       this.resolveUrl(url, config),
       this.buildInit(config?.method ?? "GET", config?.body, config),
@@ -51,19 +55,23 @@ export class FetchHttpClient implements HttpClient {
     if (!response.ok) {
       throw new HttpError(response.status, await response.text());
     }
+    await this.pumpChunks(response, onChunk);
+  }
+
+  private async pumpChunks(
+    response: Response,
+    onChunk: (chunk: Uint8Array) => void,
+  ): Promise<void> {
     const reader = response.body?.getReader();
-    if (!reader) {
-      return;
+    if (!reader) return;
+    for (let read = await reader.read(); !read.done; read = await reader.read()) {
+      this.emitChunk(read.value, onChunk);
     }
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) {
-        return;
-      }
-      if (value) {
-        yield value;
-      }
-    }
+  }
+
+  private emitChunk(value: Uint8Array | undefined, onChunk: (chunk: Uint8Array) => void): void {
+    if (!value) return;
+    onChunk(value);
   }
 
   private async request<TResponse>(

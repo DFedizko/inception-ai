@@ -1,7 +1,9 @@
+import type { UUID } from "@/features/shared/value-objects/uuid";
+
 import type { Message } from "./message.model";
 
 export type Conversation = {
-  id: string;
+  id: UUID;
   title: string;
   createdAt: string;
   instruction: string | null;

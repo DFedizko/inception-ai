@@ -35,6 +35,7 @@ type MessageRecord = {
   role: string;
   type: string;
   createdAt: Date;
+  responseDurationMs: number | null;
   contents: ContentRecord[];
 };
 
@@ -68,6 +69,7 @@ export class ConversationRepositoryPrisma implements ConversationRepository {
             type: message.modality.toString(),
             createdAt: message.createdAt,
             position,
+            responseDurationMs: message.responseDurationMs ?? null,
           },
         });
 
@@ -157,6 +159,7 @@ export class ConversationRepositoryPrisma implements ConversationRepository {
       modality: Modality.fromString(record.type),
       contents: record.contents.map((content) => this.toContent(content)),
       createdAt: record.createdAt,
+      responseDurationMs: record.responseDurationMs ?? undefined,
     });
   }
 

@@ -1,7 +1,7 @@
 import { container } from "@/bounded-contexts/conversation/di";
 import { ConversationController } from "@/bounded-contexts/conversation/presentation/controllers/conversation.controller";
 import { errorResponse } from "../error-response";
-import { streamingTextResponse } from "../streaming-response";
+import { streamingReplyResponse } from "../streaming-response";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +18,7 @@ export const POST = async (request: Request): Promise<Response> => {
   const controller = container.get(ConversationController);
   const headers: Record<string, string> = {};
 
-  return streamingTextResponse(
+  return streamingReplyResponse(
     (onChunk) =>
       controller.beginConversation(body, onChunk, (conversationId) => {
         headers["x-conversation-id"] = conversationId;

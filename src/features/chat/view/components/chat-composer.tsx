@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { KeyboardEvent } from "react";
 import {
   ArrowUp,
@@ -19,9 +19,8 @@ import { ModelSelector } from "./model-selector";
 
 export const ChatComposer = () => {
   const [draft, setDraft] = useState("");
-  const { isReplying, activeConversationId, models } = useChatStore();
+  const { isReplying, models } = useChatStore();
   const {
-    loadModels,
     sendMessage,
     generateImage,
     generateVideo,
@@ -29,22 +28,26 @@ export const ChatComposer = () => {
     isRecordingImagePrompt,
     changeMode,
     canUseVoice,
+    canGenerateImage,
+    canGenerateVideo,
   } = useChatViewModel();
 
-  useEffect(() => {
-    loadModels();
-  }, []);
-
-  const hasConversation = activeConversationId !== null;
   const sendBlockedReason = reasonSendDisabled({ isReplying, draft });
-  const mediaBlockedReason = reasonMediaDisabled({
-    hasConversation,
+  const imageBlockedReason = reasonMediaDisabled({
+    capable: canGenerateImage,
     isReplying,
     draft,
+    noun: "imagem",
+  });
+  const videoBlockedReason = reasonMediaDisabled({
+    capable: canGenerateVideo,
+    isReplying,
+    draft,
+    noun: "vídeo",
   });
   const voiceBlockedReason = reasonVoiceDisabled(canUseVoice, models);
   const recordBlockedReason = reasonRecordDisabled({
-    hasConversation,
+    capable: canGenerateImage,
     isReplying,
   });
 
@@ -55,13 +58,13 @@ export const ChatComposer = () => {
   };
 
   const submitImage = () => {
-    if (mediaBlockedReason !== undefined) return;
+    if (imageBlockedReason !== undefined) return;
     void generateImage(draft);
     setDraft("");
   };
 
   const submitVideo = () => {
-    if (mediaBlockedReason !== undefined) return;
+    if (videoBlockedReason !== undefined) return;
     void generateVideo(draft);
     setDraft("");
   };
@@ -74,7 +77,7 @@ export const ChatComposer = () => {
   };
 
   return (
-    <div className="flex flex-col gap-2 border-t border-line px-6 py-4">
+    <div className="sticky bottom-0 z-10 flex flex-col gap-2 border-t border-line bg-base/90 px-6 py-4 backdrop-blur-sm">
       <div className="flex items-center justify-end gap-2">
         <ModelSelector />
       </div>
@@ -99,13 +102,13 @@ export const ChatComposer = () => {
           className="max-h-40 flex-1 resize-none bg-transparent py-2 text-sm text-ink outline-none placeholder:text-ink-muted disabled:cursor-not-allowed"
         />
         <Tooltip
-          label={mediaBlockedReason ?? "Gerar imagem a partir do texto"}
+          label={imageBlockedReason ?? "Gerar imagem a partir do texto"}
           placement="top"
         >
           <button
             type="button"
             onClick={submitImage}
-            disabled={mediaBlockedReason !== undefined}
+            disabled={imageBlockedReason !== undefined}
             className="flex size-9 shrink-0 items-center justify-center rounded-xl text-ink-muted transition hover:text-ink disabled:opacity-40"
             aria-label="Gerar imagem"
           >
@@ -113,13 +116,13 @@ export const ChatComposer = () => {
           </button>
         </Tooltip>
         <Tooltip
-          label={mediaBlockedReason ?? "Gerar vídeo a partir do texto"}
+          label={videoBlockedReason ?? "Gerar vídeo a partir do texto"}
           placement="top"
         >
           <button
             type="button"
             onClick={submitVideo}
-            disabled={mediaBlockedReason !== undefined}
+            disabled={videoBlockedReason !== undefined}
             className="flex size-9 shrink-0 items-center justify-center rounded-xl text-ink-muted transition hover:text-ink disabled:opacity-40"
             aria-label="Gerar vídeo"
           >
@@ -186,42 +189,39 @@ const reasonSendDisabled = ({
 };
 
 const reasonRecordDisabled = ({
-  hasConversation,
+  capable,
   isReplying,
 }: {
-  hasConversation: boolean;
+  capable: boolean;
   isReplying: boolean;
 }): string | undefined => {
-  if (!hasConversation) return "Comece uma nova conversa para gravar";
+  if (!capable) return "O modelo selecionado não gera imagem";
   if (isReplying) return "Aguarde a IA terminar";
   return undefined;
 };
 
 type MediaState = {
-  hasConversation: boolean;
+  capable: boolean;
   isReplying: boolean;
   draft: string;
+  noun: string;
 };
 
 const reasonMediaDisabled = ({
-  hasConversation,
+  capable,
   isReplying,
   draft,
+  noun,
 }: MediaState): string | undefined => {
-  if (!hasConversation) return "Envie uma mensagem antes de gerar mídia";
+  if (!capable) return `O modelo selecionado não gera ${noun}`;
   if (isReplying) return "Aguarde a IA terminar de responder";
   if (draft.trim().length === 0) return "Escreva um prompt para gerar";
   return undefined;
 };
 
-const reasonVoiceDisabled = (
-  canUseVoice: boolean,
-  models: AiModel[],
-): string | undefined => {
+const reasonVoiceDisabled = (canUseVoice: boolean, models: AiModel[]): string | undefined => {
   if (canUseVoice) return undefined;
   if (models.length === 0) return "Nenhum modelo disponível no momento";
-  if (!models.some((model) => model.capabilities.includes("live"))) {
-    return "Nenhum modelo suporta voz";
-  }
+  if (!models.some((model) => model.isLive())) return "Nenhum modelo suporta voz";
   return "O modelo selecionado não suporta voz — escolha um modelo de voz";
 };

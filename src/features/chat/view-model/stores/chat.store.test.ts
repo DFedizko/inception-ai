@@ -1,27 +1,26 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 
-import type { AiModel } from "../../model/ai-model.model";
+import { UUID } from "@/features/shared/value-objects/uuid";
+import { AiModel } from "../../model/ai-model.model";
 import type { ConversationSummary } from "../../model/conversation-summary.model";
-import type { Message } from "../../model/message.model";
+import { Message } from "../../model/message.model";
 import { useChatStore } from "./chat.store";
 
-const aModel = (id: string, capabilities: AiModel["capabilities"]): AiModel => ({
-  id,
-  label: id,
-  capabilities,
-  tier: "free",
-});
+const stableId = UUID.create("3f2504e0-4f89-41d3-9a0c-0305e82c3301");
 
-const aMessage = (content: string): Message => ({
-  id: content,
-  role: "user",
-  type: "text",
-  content,
-  createdAt: "2026-05-25T10:00:00.000Z",
-});
+const aModel = (id: string, capabilities: AiModel["capabilities"]): AiModel =>
+  new AiModel(id, id, capabilities, "free");
 
-const aSummary = (id: string): ConversationSummary => ({
-  id,
+const aMessage = (content: string): Message =>
+  new Message(stableId, "user", "text", content, "2026-05-25T10:00:00.000Z");
+
+const summaryIds: Record<string, ReturnType<typeof UUID.create>> = {
+  a: UUID.create("11111111-1111-4111-8111-111111111111"),
+  b: UUID.create("22222222-2222-4222-8222-222222222222"),
+};
+
+const aSummary = (key: "a" | "b"): ConversationSummary => ({
+  id: summaryIds[key],
   title: "Nova conversa",
   createdAt: "2026-05-25T10:00:00.000Z",
 });

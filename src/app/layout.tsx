@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { NotificationViewport } from "@/features/shared/ui";
+import { QueryProvider } from "@/features/shared/query/query-provider";
 
 export const metadata: Metadata = {
   title: "Chat",
@@ -15,7 +16,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        {children}
+        <QueryProvider>{children}</QueryProvider>
         <NotificationViewport />
       </body>
     </html>

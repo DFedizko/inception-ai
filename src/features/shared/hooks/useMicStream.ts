@@ -1,21 +1,21 @@
 import { useCallback, useRef, useState } from "react";
 
-import { rmsLevel } from "@/features/shared/utils/audio-level";
-
 type MicFrame = Int16Array;
 
 type OnFrame = (frame: MicFrame) => void;
 
-type AudioContextConstructor = new (options?: { sampleRate?: number }) => AudioContext;
+type AudioContextConstructor = new () => AudioContext;
 
-const TARGET_SAMPLE_RATE = 16000;
-const BUFFER_SIZE = 4096;
+const WORKLET_URL = "/audio-worklets/pcm-capture-worklet.js";
+const WORKLET_PROCESSOR = "pcm-capture-processor";
+
+type WorkletMessage = { pcm: Int16Array; level: number };
 
 type Capture = {
   stream: MediaStream;
   context: AudioContext;
   source: MediaStreamAudioSourceNode;
-  processor: ScriptProcessorNode;
+  worklet: AudioWorkletNode;
 };
 
 export const useMicStream = () => {
@@ -31,22 +31,22 @@ export const useMicStream = () => {
       setError(new Error("Microphone streaming is not supported in this browser"));
       return;
     }
+    let stream: MediaStream | null = null;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const context = new AudioContextCtor({ sampleRate: TARGET_SAMPLE_RATE });
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const context = new AudioContextCtor();
+      await context.audioWorklet.addModule(WORKLET_URL);
       const source = context.createMediaStreamSource(stream);
-      const processor = context.createScriptProcessor(BUFFER_SIZE, 1, 1);
-      processor.onaudioprocess = (event) => {
-        const samples = event.inputBuffer.getChannelData(0);
-        level.current = rmsLevel(samples);
-        const resampled = resample(samples, context.sampleRate, TARGET_SAMPLE_RATE);
-        onFrame(toPcm16(resampled));
+      const worklet = new AudioWorkletNode(context, WORKLET_PROCESSOR);
+      worklet.port.onmessage = (event: MessageEvent<WorkletMessage>) => {
+        level.current = event.data.level;
+        onFrame(event.data.pcm);
       };
-      source.connect(processor);
-      processor.connect(context.destination);
-      capture.current = { stream, context, source, processor };
+      source.connect(worklet);
+      capture.current = { stream, context, source, worklet };
       setIsCapturing(true);
     } catch (cause) {
+      stopTracks(stream);
       setError(cause instanceof Error ? cause : new Error("Microphone access failed"));
       setIsCapturing(false);
     }
@@ -58,11 +58,11 @@ export const useMicStream = () => {
     level.current = 0;
     setIsCapturing(false);
     if (!active) return;
-    active.processor.onaudioprocess = null;
+    active.worklet.port.onmessage = null;
+    active.worklet.disconnect();
     active.source.disconnect();
-    active.processor.disconnect();
-    active.stream.getTracks().forEach((track) => track.stop());
-    await active.context.close();
+    stopTracks(active.stream);
+    if (active.context.state !== "closed") await active.context.close();
   }, []);
 
   const getLevel = useCallback(() => level.current, []);
@@ -78,22 +78,6 @@ const resolveAudioContext = (): AudioContextConstructor | undefined => {
   return scope.AudioContext ?? scope.webkitAudioContext;
 };
 
-const resample = (samples: Float32Array, fromRate: number, toRate: number): Float32Array => {
-  if (fromRate === toRate) return samples;
-  const ratio = fromRate / toRate;
-  const length = Math.round(samples.length / ratio);
-  const result = new Float32Array(length);
-  for (let index = 0; index < length; index += 1) {
-    result[index] = samples[Math.floor(index * ratio)];
-  }
-  return result;
-};
-
-const toPcm16 = (samples: Float32Array): Int16Array => {
-  const pcm = new Int16Array(samples.length);
-  for (let index = 0; index < samples.length; index += 1) {
-    const clamped = Math.max(-1, Math.min(1, samples[index]));
-    pcm[index] = Math.round(clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff);
-  }
-  return pcm;
+const stopTracks = (stream: MediaStream | null): void => {
+  stream?.getTracks().forEach((track) => track.stop());
 };

@@ -29,17 +29,18 @@ export class SendMessage {
     conversation.recordUserMessage(input.content, input.modality);
     await this.conversations.save(conversation);
 
+    const generationStartedAt = Date.now();
     let assembledReply = "";
     await this.ai.streamReply(
       conversation.history(),
       (chunk) => {
-        assembledReply += chunk;
+        if (chunk.kind === "answer") assembledReply += chunk.text;
         onChunk(chunk);
       },
       conversation.instructionText(),
     );
 
-    conversation.recordAssistantReply(assembledReply, Modality.text());
+    conversation.recordAssistantReply(assembledReply, Modality.text(), Date.now() - generationStartedAt);
     await this.conversations.save(conversation);
   }
 }

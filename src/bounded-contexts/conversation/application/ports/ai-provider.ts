@@ -1,6 +1,10 @@
 import type { Turn } from "../../domain/aggregates/conversation.aggregate";
 
-export type ReplyChunkListener = (chunk: string) => void;
+export type ReplyChunkKind = "answer" | "thought";
+
+export type ReplyChunk = { kind: ReplyChunkKind; text: string };
+
+export type ReplyChunkListener = (chunk: ReplyChunk) => void;
 
 export interface AiProvider {
   streamReply(

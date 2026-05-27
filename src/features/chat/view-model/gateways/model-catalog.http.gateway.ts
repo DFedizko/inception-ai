@@ -1,6 +1,6 @@
 import type { HttpClient } from "@/features/shared/http/http-client";
 
-import type { AiModel, Capability, Tier } from "../../model/ai-model.model";
+import { AiModel, type Capability, type Tier } from "../../model/ai-model.model";
 import type { ModelCatalogGateway } from "./model-catalog.gateway";
 
 type ModelInfoDTO = { id: string; label: string; capabilities: Capability[]; tier: Tier };
@@ -16,6 +16,6 @@ export class HttpModelCatalogGateway implements ModelCatalogGateway {
   }
 
   private toModel(dto: ModelInfoDTO): AiModel {
-    return { id: dto.id, label: dto.label, capabilities: dto.capabilities, tier: dto.tier };
+    return new AiModel(dto.id, dto.label, dto.capabilities, dto.tier);
   }
 }

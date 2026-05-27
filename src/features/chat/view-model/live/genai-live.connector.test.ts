@@ -34,8 +34,8 @@ const fakeFactory = (captured: Captured) => () => ({
       captured.onerror = args.callbacks.onerror;
       captured.onclose = args.callbacks.onclose;
       return {
-        sendRealtimeInput: (input: { media: { data: string; mimeType: string } }) =>
-          captured.realtime.push(input.media),
+        sendRealtimeInput: (input: { audio: { data: string; mimeType: string } }) =>
+          captured.realtime.push(input.audio),
         sendClientContent: (input: {
           turns: { role: string; parts: { text: string }[] }[];
           turnComplete?: boolean;
@@ -77,7 +77,7 @@ const newCaptured = (): Captured => ({
 });
 
 describe("genai live connector", () => {
-  it("connects with the audio modality and transcription config", async () => {
+  it("connects to the model with an empty client config (session config lives in the token)", async () => {
     const captured = newCaptured();
     const { callbacks } = collectingCallbacks();
 
@@ -87,7 +87,7 @@ describe("genai live connector", () => {
     );
 
     expect(captured.model).toBe("live-model");
-    expect(captured.config?.responseModalities).toHaveLength(1);
+    expect(captured.config).toEqual({});
   });
 
   it("seeds prior history without completing the turn", async () => {

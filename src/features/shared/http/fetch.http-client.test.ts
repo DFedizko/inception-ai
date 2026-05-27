@@ -83,17 +83,16 @@ describe("fetch http client", () => {
     });
   });
 
-  it("yields decoded text chunks from a streamed body", async () => {
+  it("pushes decoded text chunks from a streamed body to the callback", async () => {
     stubFetch(() => streamOf(["Olá", " mun", "do"]));
     const client = new FetchHttpClient();
 
     const chunks: string[] = [];
-    for await (const chunk of client.stream("/api/conversations/c1/messages", {
-      method: "POST",
-      body: { content: "oi", type: "text" },
-    })) {
-      chunks.push(chunk);
-    }
+    await client.stream(
+      "/api/conversations/c1/messages",
+      { method: "POST", body: { content: "oi", type: "text" } },
+      (chunk) => chunks.push(chunk),
+    );
 
     expect(chunks.join("")).toBe("Olá mundo");
   });

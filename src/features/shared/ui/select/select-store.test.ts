@@ -3,6 +3,8 @@ import {
   createSelectStore,
   firstEnabledIndex,
   isSelected,
+  pageCount,
+  pagedOptions,
   visibleOptions,
   type SelectConfig,
 } from "./select-store";
@@ -105,6 +107,44 @@ describe("createSelectStore", () => {
     store.getState().open();
     store.getState().selectByIndex(1);
     expect(emit).not.toHaveBeenCalled();
+  });
+});
+
+describe("pagination", () => {
+  const many: SelectOption<number>[] = Array.from({ length: 7 }, (_, i) => ({ value: i, label: `Model ${i}` }));
+  const paged = (overrides = {}) => ({ options: many, query: "", searchable: false, pageSize: 3, page: 0, ...overrides });
+
+  it("counts pages from the visible options and the page size", () => {
+    expect(pageCount(paged())).toBe(3);
+    expect(pageCount({ ...paged(), pageSize: undefined })).toBe(1);
+  });
+
+  it("slices the visible options to the current page", () => {
+    expect(pagedOptions(paged({ page: 0 })).map((o) => o.value)).toEqual([0, 1, 2]);
+    expect(pagedOptions(paged({ page: 2 })).map((o) => o.value)).toEqual([6]);
+  });
+
+  it("returns every visible option when no page size is set", () => {
+    expect(pagedOptions({ ...paged(), pageSize: undefined })).toHaveLength(7);
+  });
+
+  it("clamps and navigates pages through the store", () => {
+    const store = createSelectStore(config({ options: many as never, pageSize: 3 }) as never);
+    store.getState().open();
+    store.getState().setPage(2);
+    expect(store.getState().page).toBe(2);
+    store.getState().setPage(99);
+    expect(store.getState().page).toBe(2);
+    store.getState().setPage(-5);
+    expect(store.getState().page).toBe(0);
+  });
+
+  it("resets to the first page when the query changes", () => {
+    const store = createSelectStore(config({ options: many as never, pageSize: 3, searchable: true }) as never);
+    store.getState().open();
+    store.getState().setPage(2);
+    store.getState().setQuery("Model");
+    expect(store.getState().page).toBe(0);
   });
 });
 

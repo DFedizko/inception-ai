@@ -1,20 +1,10 @@
-import type { AiModel } from "../../model/ai-model.model";
+import { AiModel } from "../../model/ai-model.model";
 import type { ModelCatalogGateway } from "./model-catalog.gateway";
 
 const catalog: AiModel[] = [
-  { id: "gemini-3.5-flash", label: "Gemini 3.5 Flash", capabilities: ["text"], tier: "free" },
-  {
-    id: "gemini-3.1-flash-live-preview",
-    label: "Gemini 3.1 Flash Live",
-    capabilities: ["text", "live"],
-    tier: "free",
-  },
-  {
-    id: "gemini-2.5-pro",
-    label: "Gemini 2.5 Pro",
-    capabilities: ["text"],
-    tier: "paid",
-  },
+  new AiModel("gemini-3.5-flash", "Gemini 3.5 Flash", ["text"], "free"),
+  new AiModel("gemini-3.1-flash-live-preview", "Gemini 3.1 Flash Live", ["text", "live"], "free"),
+  new AiModel("gemini-2.5-pro", "Gemini 2.5 Pro", ["text"], "paid"),
 ];
 
 export class MockModelCatalogGateway implements ModelCatalogGateway {

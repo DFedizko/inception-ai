@@ -10,9 +10,11 @@ type MarkdownProps = {
 };
 
 export const Markdown = ({ children }: MarkdownProps) => (
-  <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={components}>
-    {children}
-  </ReactMarkdown>
+  <div className="break-words [overflow-wrap:anywhere]">
+    <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={components}>
+      {children}
+    </ReactMarkdown>
+  </div>
 );
 
 const components: Components = {

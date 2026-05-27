@@ -19,9 +19,9 @@ export const MessageList = () => {
   if (messages.length === 0) return <EmptyState />;
 
   return (
-    <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-6 py-8">
+    <div className="flex flex-1 flex-col gap-6 px-6 py-8">
       {messages.map((message) => (
-        <MessageBubble key={message.id} message={message} />
+        <MessageBubble key={message.id.value} message={message} />
       ))}
       <div ref={anchor} />
     </div>

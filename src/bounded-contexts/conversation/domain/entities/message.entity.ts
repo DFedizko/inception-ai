@@ -9,6 +9,7 @@ type MessageProps = {
   modality: Modality;
   contents: Content[];
   createdAt: Date;
+  responseDurationMs?: number;
 };
 
 export class Message {
@@ -18,16 +19,16 @@ export class Message {
     return Message.create(Role.user(), modality, [TextContent.of(text)]);
   }
 
-  static fromAssistant(text: string, modality: Modality): Message {
-    return Message.create(Role.assistant(), modality, [TextContent.of(text)]);
+  static fromAssistant(text: string, modality: Modality, responseDurationMs?: number): Message {
+    return Message.create(Role.assistant(), modality, [TextContent.of(text)], responseDurationMs);
   }
 
   static userWith(modality: Modality, contents: Content[]): Message {
     return Message.create(Role.user(), modality, contents);
   }
 
-  static assistantWith(modality: Modality, contents: Content[]): Message {
-    return Message.create(Role.assistant(), modality, contents);
+  static assistantWith(modality: Modality, contents: Content[], responseDurationMs?: number): Message {
+    return Message.create(Role.assistant(), modality, contents, responseDurationMs);
   }
 
   static reconstitute(props: MessageProps): Message {
@@ -54,6 +55,10 @@ export class Message {
     return this.props.createdAt;
   }
 
+  get responseDurationMs(): number | undefined {
+    return this.props.responseDurationMs;
+  }
+
   text(): string {
     return this.props.contents
       .filter((content): content is TextContent => content.kind === "text")
@@ -69,7 +74,12 @@ export class Message {
     return this.props.role.isAssistant();
   }
 
-  private static create(role: Role, modality: Modality, contents: Content[]): Message {
+  private static create(
+    role: Role,
+    modality: Modality,
+    contents: Content[],
+    responseDurationMs?: number,
+  ): Message {
     if (contents.length === 0) {
       throw new EmptyMessageContentError();
     }
@@ -82,6 +92,7 @@ export class Message {
       modality,
       contents,
       createdAt: new Date(),
+      responseDurationMs,
     });
   }
 }

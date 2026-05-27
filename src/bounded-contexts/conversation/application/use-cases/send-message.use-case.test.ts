@@ -4,11 +4,17 @@ import { Modality } from "../../domain/value-objects/modality.value-object";
 import { FakeAiProvider } from "../../infrastructure/ai/ai-provider.fake";
 import { InMemoryConversationRepository } from "../../infrastructure/repositories/conversation.repository.in-memory";
 import { ConversationNotFoundError } from "../errors/conversation-not-found.error";
+import type { ReplyChunk } from "../ports/ai-provider";
 import { SendMessage } from "./send-message.use-case";
 
-const collectChunks = (): { onChunk: (chunk: string) => void; assembled: () => string } => {
+const collectChunks = () => {
   let assembled = "";
-  return { onChunk: (chunk) => (assembled += chunk), assembled: () => assembled };
+  return {
+    onChunk: (chunk: ReplyChunk) => {
+      if (chunk.kind === "answer") assembled += chunk.text;
+    },
+    assembled: () => assembled,
+  };
 };
 
 describe("SendMessage", () => {
@@ -30,6 +36,9 @@ describe("SendMessage", () => {
       "Capital of France?",
       "Paris is the capital.",
     ]);
+    expect(persisted?.messages[0]?.responseDurationMs).toBeUndefined();
+    expect(typeof persisted?.messages[1]?.responseDurationMs).toBe("number");
+    expect(persisted?.messages[1]?.responseDurationMs).toBeGreaterThanOrEqual(0);
   });
 
   it("derives the title from the first user message", async () => {

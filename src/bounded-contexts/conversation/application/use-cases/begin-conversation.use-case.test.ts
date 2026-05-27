@@ -13,7 +13,9 @@ describe("BeginConversation", () => {
 
     await new BeginConversation(repository, ai).execute(
       { content: "Capital of France?", modality: Modality.text() },
-      (chunk) => (assembled += chunk),
+      (chunk) => {
+        if (chunk.kind === "answer") assembled += chunk.text;
+      },
       (id) => (startedId = id),
     );
 

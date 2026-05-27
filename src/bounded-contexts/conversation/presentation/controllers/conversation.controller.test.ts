@@ -57,7 +57,7 @@ describe("ConversationController", () => {
     let startedId = "";
 
     await controller.beginConversation({ content: "Hello", type: "text" }, (chunk) => {
-      assembled += chunk;
+      if (chunk.kind === "answer") assembled += chunk.text;
     }, (id) => {
       startedId = id;
     });
@@ -99,7 +99,7 @@ describe("ConversationController", () => {
     let assembled = "";
 
     await controller.sendMessage(started.id, { content: "Hello", type: "text" }, (chunk) => {
-      assembled += chunk;
+      if (chunk.kind === "answer") assembled += chunk.text;
     });
 
     expect(assembled).toBe("Hi!");

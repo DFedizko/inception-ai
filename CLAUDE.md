@@ -34,6 +34,8 @@ Treat this as a hard gate: **no tests and no code until the domain model is vali
 - **Domain-first.** Model the domain before designing pages or frontend features. Pages/features and even database tables are *derived from* the domain, never the other way around.
 - **Bounded contexts.** The backend is organized by bounded contexts. The MVP has **one**: the user conversing with the AI by text or voice. Other contexts (e.g. auth, billing) are added only if/when needed.
 - **Anti-Corruption Layer (ACL).** Every external domain we depend on (AI providers such as Gemini) is a **foreign bounded context with its own model**. The dependency is one-way: **the external model adapts to ours, never the reverse.** An ACL is the translation barrier that maps the provider's shapes into our ubiquitous language so nothing "provider-flavored" leaks past it — including *composing* several provider calls when one of our domain operations has no native equivalent (e.g. a voice prompt that yields an image = transcribe-then-generate, hidden behind one port). This is the strategic side; **where the ACL lives in code (ports, adapters, `anti-corruption/` translators) is detailed in the backend guide.**
+- **Context Map between our own contexts.** Internal bounded contexts integrate through an explicit Context Map, never by reaching into each other's model. The dependency points **one way** (downstream depends on upstream — e.g. `Conversation` is downstream of `Agent`), using a deliberate pattern (Customer/Supplier, Conformist, Shared Kernel, Open Host Service / Published Language, Partnership, Separate Ways — and ACL). **ACL is not the default; it is the *defensive* pattern** — use it wherever a context must protect its ubiquitous language from another's model (always against external systems like Gemini; internally where a downstream context would otherwise be polluted). Cross a boundary by **reference + a snapshot of what was used** (id + version), not by sharing live mutable state — this keeps provenance truthful and coupling low.
+- **A bounded context must stay extractable into its own microservice.** Nothing crosses a boundary except through the Context Map (ids, events, published language), so any context could become a separate deployable talking only by events/contracts — use that as the litmus test for a clean boundary. The boundary is a *modeling* decision; becoming a service is a later, optional deployment choice it merely enables.
 - Tactical DDD (aggregates, entities, value objects, policies, domain services) is detailed in the **backend** guide.
 
 ### Ubiquitous language (living glossary)
@@ -110,14 +112,15 @@ src/
     │   │   │   └── chat.store.ts
     │   │   └── gateways/             #       feature-specific API gateways (map DTO → read model)
     │   │       └── conversation.gateway.ts
-    │   └── model/                #     entity/aggregate mirrors, no behavior — <concept>.model.ts
+    │   └── model/                #     entity/aggregate mirrors (classes w/ frontend-only rules) — <concept>.model.ts
     └── shared/                   #   frontend SHARED (never mixes back/front code)
         ├── ui/                   #     design-system primitives (Button, Input, Icon…)
         ├── hooks/                #     generic hooks (useDebounce, useMediaQuery…)
         ├── utils/                #     reusable pure helpers (formatDate, formatPhone…)
         ├── http/                 #     HttpClient port + fetch/axios adapters
         ├── storage/              #     cookies/localStorage/sessionStorage/IndexedDB adapters behind ports
-        └── gateways/             #     gateways promoted here when used by multiple features
+        ├── gateways/             #     gateways promoted here when used by multiple features
+        └── value-objects/        #     shared VOs (classes: private ctor + static create) — e.g. UUID
 ```
 
 Notes:
@@ -151,6 +154,14 @@ Apply SOLID across both layers:
 - **I**nterface Segregation — small, focused ports over fat ones.
 - **D**ependency Inversion — depend on abstractions (ports), never on concrete implementations. This is the backbone of our Clean Architecture and frontend gateways.
 
+## Object Calisthenics (everyone)
+
+Small, readable methods on both layers:
+- **No `else`** — branch with **early returns** (guard clauses); handle the edge case first and `return`.
+- **No generator functions** — never `function*` / `async function*` anywhere. Streaming is **callback-based** (`onChunk`/`onReply`). Consuming an *external* `AsyncIterable` (a provider SDK stream) with `for await` is fine; just never author your own generator.
+- **Loops delegate** — a `for`/`while` body holds no branching logic: iterate and **call a named helper per item** (`lines.forEach((line) => emitLine(line))`).
+- **Tiny, one-level-deep methods** — prefer many small named helpers over nested blocks.
+
 ## Code style (everyone)
 
 - **Always arrow functions.** Never use `function` declarations.
@@ -170,7 +181,7 @@ export const getItem = () => {}
 
 ## Stack
 
-Bun · Next.js 16 (App Router) · TypeScript · Tailwind v4 · **Prisma 7** ORM over **Postgres** (persistence) · **Zod** (validation) · **Inversify** (backend dependency injection — see the backend guide) · **Zustand** (state management) · **React Hook Form** (forms) · **lucide-react** (icons) · AI providers for text and voice (e.g. Gemini).
+Bun · Next.js 16 (App Router) · TypeScript · Tailwind v4 · **Prisma 7** ORM over **Postgres** (persistence) · **Zod** (validation) · **Inversify** (backend dependency injection — see the backend guide) · **Zustand** (state management) · **TanStack Query** (`@tanstack/react-query` — server-state caching/mutations behind the feature `query/` & `mutation/` hooks) · **React Hook Form** (forms) · **lucide-react** (icons) · **MSW** (Mock Service Worker — dev dep, HTTP interception in frontend integration tests) · AI providers for text and voice (e.g. Gemini).
 
 > **Persistence.** Prisma 7 (TypeScript engine, `prisma-client` generator) talks to Postgres through the `@prisma/adapter-pg` driver adapter. The generated client lives in `src/generated/prisma` (gitignored — run `bun run db:generate` after install). Local dev runs Postgres via `docker compose up -d` (`bun run db:up`); set `DATABASE_URL` in `.env` (see `.env.example`).
 

@@ -44,8 +44,9 @@ export interface HttpClient {
   options(url: string, config?: HttpRequestConfig): Promise<void>;
   stream<TBody = unknown>(
     url: string,
-    config?: HttpStreamConfig<TBody>,
-  ): AsyncIterable<string>;
+    config: HttpStreamConfig<TBody>,
+    onChunk: (chunk: string) => void,
+  ): Promise<void>;
 }
 
 export class HttpError extends Error {

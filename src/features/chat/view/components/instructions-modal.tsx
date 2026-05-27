@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { Markdown, Modal, ModalFooter, ModalTitle } from "@/features/shared/ui";
 import { useChatStore } from "../../view-model/stores/chat.store";
@@ -18,10 +18,12 @@ export const InstructionsModal = ({
   const { activeInstruction } = useChatStore();
   const { instructAgent } = useChatViewModel();
   const [draft, setDraft] = useState("");
+  const [wasOpen, setWasOpen] = useState(open);
 
-  useEffect(() => {
+  if (open !== wasOpen) {
+    setWasOpen(open);
     if (open) setDraft(activeInstruction ?? "");
-  }, [open]);
+  }
 
   const save = async () => {
     await instructAgent(draft);
@@ -32,14 +34,15 @@ export const InstructionsModal = ({
     <Modal
       open={open}
       onClose={onClose}
-      animation="genie"
+      animation="elastic"
+      direction="top-right"
       size="xl"
       ariaLabel="Instruções do agente"
     >
       <ModalTitle>Instruções do agente</ModalTitle>
 
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-px overflow-hidden bg-line md:grid-cols-2">
-        <div className="flex min-h-0 flex-col bg-panel">
+        <div className="flex min-h-0 min-w-0 flex-col bg-panel">
           <span className="px-4 pt-3 text-xs font-medium uppercase tracking-wide text-ink-muted">
             Markdown
           </span>
@@ -52,7 +55,7 @@ export const InstructionsModal = ({
             className="min-h-72 flex-1 resize-none bg-panel px-4 py-3 font-mono text-sm text-ink outline-none placeholder:text-ink-muted"
           />
         </div>
-        <div className="flex min-h-0 flex-col bg-panel">
+        <div className="flex min-h-0 min-w-0 flex-col bg-panel">
           <span className="px-4 pt-3 text-xs font-medium uppercase tracking-wide text-ink-muted">
             Preview
           </span>

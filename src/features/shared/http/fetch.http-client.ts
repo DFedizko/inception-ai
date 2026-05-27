@@ -49,13 +49,14 @@ export class FetchHttpClient implements HttpClient {
     await this.send("OPTIONS", url, undefined, config ?? {});
   }
 
-  async *stream<TBody = unknown>(
+  async stream<TBody = unknown>(
     url: string,
-    config: HttpStreamConfig<TBody> = {},
-  ): AsyncIterable<string> {
+    config: HttpStreamConfig<TBody>,
+    onChunk: (chunk: string) => void,
+  ): Promise<void> {
     const response = await this.send(config.method ?? "GET", url, config.body, config);
     config.onResponse?.(response);
-    yield* this.readChunks(response);
+    await this.pumpChunks(response, onChunk);
   }
 
   private async request<TResponse>(
@@ -112,18 +113,19 @@ export class FetchHttpClient implements HttpClient {
     return (await response.text()) as TResponse;
   }
 
-  private async *readChunks(response: Response): AsyncIterable<string> {
+  private async pumpChunks(response: Response, onChunk: (chunk: string) => void): Promise<void> {
     const reader = response.body?.getReader();
     if (!reader) return;
     const decoder = new TextDecoder();
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const chunk = decoder.decode(value, { stream: true });
-      if (chunk.length > 0) yield chunk;
+    for (let read = await reader.read(); !read.done; read = await reader.read()) {
+      this.emitChunk(decoder.decode(read.value, { stream: true }), onChunk);
     }
-    const tail = decoder.decode();
-    if (tail.length > 0) yield tail;
+    this.emitChunk(decoder.decode(), onChunk);
+  }
+
+  private emitChunk(chunk: string, onChunk: (chunk: string) => void): void {
+    if (chunk.length === 0) return;
+    onChunk(chunk);
   }
 
   private async toHttpError(response: Response): Promise<HttpError> {

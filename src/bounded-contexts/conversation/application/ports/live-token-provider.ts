@@ -5,5 +5,5 @@ export type LiveToken = {
 };
 
 export interface LiveTokenProvider {
-  mint(): Promise<LiveToken>;
+  mint(instruction?: string | null): Promise<LiveToken>;
 }

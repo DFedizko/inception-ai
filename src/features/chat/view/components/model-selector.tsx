@@ -1,20 +1,25 @@
 "use client";
 
+import { useState } from "react";
 import { Tooltip } from "@/features/shared/ui";
-import type { AiModel, Capability, Tier } from "../../model/ai-model.model";
+import type { AiModel, Tier } from "../../model/ai-model.model";
 import { useChatStore } from "../../view-model/stores/chat.store";
 import { useChatViewModel } from "../../view-model/useChatViewModel";
+import { ModelFilterTabs, type ModelFilter } from "./model-filter-tabs";
 import { ModelSelectorSkeleton } from "./model-selector-skeleton";
 import { Badge, Select } from "./select.seam";
+
+const modelsPerPage = 6;
 
 export const ModelSelector = () => {
   const { models, isLoadingModels, selectedModelId, mode } = useChatStore();
   const { selectModel } = useChatViewModel();
+  const [filter, setFilter] = useState<ModelFilter>(mode);
 
   if (isLoadingModels && models.length === 0) return <ModelSelectorSkeleton />;
 
-  const capable = models.filter(byCapability(mode === "voice" ? "live" : "text"));
-  const noModelReason = capable.length === 0 ? reasonNoModel(mode) : undefined;
+  const matching = models.filter(byFilter(filter));
+  const noModelReason = matching.length === 0 ? reasonNoModel(filter) : undefined;
 
   return (
     <Tooltip label={noModelReason} placement="bottom" className="w-full">
@@ -22,9 +27,11 @@ export const ModelSelector = () => {
         label="Modelo"
         placeholder="Escolha um modelo"
         value={selectedModelId}
-        disabled={capable.length === 0}
+        searchable
+        pageSize={modelsPerPage}
+        toolbar={<ModelFilterTabs value={filter} onChange={setFilter} />}
         onChange={selectModel}
-        options={capable.map((model) => ({
+        options={matching.map((model) => ({
           value: model.id,
           label: model.label,
           trailing: tierBadge(model.tier),
@@ -34,8 +41,11 @@ export const ModelSelector = () => {
   );
 };
 
-const reasonNoModel = (mode: "text" | "voice") =>
-  mode === "voice"
+const byFilter = (filter: ModelFilter) => (model: AiModel) =>
+  filter === "voice" ? model.isLive() : model.supports("text");
+
+const reasonNoModel = (filter: ModelFilter) =>
+  filter === "voice"
     ? "Nenhum modelo de voz disponível no momento"
     : "Nenhum modelo de texto disponível no momento";
 
@@ -49,6 +59,3 @@ const tierBadge = (tier: Tier) => {
   }
   return <Badge tone={tier === "free" ? "accent" : "neutral"}>{tier}</Badge>;
 };
-
-const byCapability = (capability: Capability) => (model: AiModel) =>
-  model.capabilities.includes(capability);

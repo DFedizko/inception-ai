@@ -9,7 +9,7 @@ export class IssueLiveToken {
     private readonly liveTokens: LiveTokenProvider,
   ) {}
 
-  async execute(): Promise<LiveToken> {
-    return this.liveTokens.mint();
+  async execute(instruction?: string | null): Promise<LiveToken> {
+    return this.liveTokens.mint(instruction);
   }
 }

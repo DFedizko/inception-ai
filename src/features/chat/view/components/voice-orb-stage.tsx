@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { KeyboardEvent } from "react";
-import { ArrowUp, Loader2, X } from "lucide-react";
+import { ArrowUp, Loader2, Mic, MicOff, X } from "lucide-react";
 
 import { VoiceOrb, type VoiceOrbState } from "@/features/shared/ui/voice-orb/voice-orb";
 import { Tooltip } from "@/features/shared/ui";
@@ -11,8 +11,10 @@ import { useChatViewModel } from "../../view-model/useChatViewModel";
 
 export const VoiceOrbStage = () => {
   const [draft, setDraft] = useState("");
-  const { liveStatus, isListening, isSpeaking, userCaption, assistantCaption } = useChatStore();
-  const { startVoice, stopVoice, changeMode, getAudioLevel, sendTextToVoice } = useChatViewModel();
+  const { liveStatus, isListening, isSpeaking, isMicMuted, userCaption, assistantCaption } =
+    useChatStore();
+  const { startVoice, stopVoice, changeMode, toggleMicMute, getAudioLevel, sendTextToVoice } =
+    useChatViewModel();
 
   useEffect(() => {
     void startVoice();
@@ -46,6 +48,18 @@ export const VoiceOrbStage = () => {
     <div className="relative flex flex-1 flex-col items-center justify-center gap-8 px-6 pb-6">
       <button
         type="button"
+        onClick={toggleMicMute}
+        aria-label={isMicMuted ? "Ativar microfone" : "Silenciar microfone"}
+        aria-pressed={isMicMuted}
+        className={`absolute left-4 top-4 flex size-9 items-center justify-center rounded-full border border-line transition ${
+          isMicMuted ? "bg-danger/15 text-danger" : "bg-panel text-ink-muted hover:text-ink"
+        }`}
+      >
+        {isMicMuted ? <MicOff className="size-5" /> : <Mic className="size-5" />}
+      </button>
+
+      <button
+        type="button"
         onClick={() => changeMode("text")}
         aria-label="Sair da voz"
         className="absolute right-4 top-4 flex size-9 items-center justify-center rounded-full border border-line bg-panel text-ink-muted transition hover:text-ink"
@@ -58,13 +72,19 @@ export const VoiceOrbStage = () => {
           <VoiceOrb getAudioLevel={getAudioLevel} state={orbState} />
         </div>
 
-        <p
-          className="min-h-12 max-w-md text-center text-lg text-ink"
-          role="status"
-          aria-live="polite"
-        >
-          {captionFor(liveStatus, userCaption, assistantCaption)}
-        </p>
+        <div className="flex min-h-12 max-w-md flex-col items-center gap-1 text-center" aria-live="polite">
+          {assistantCaption.trim().length > 0 && <p className="text-lg text-ink">{assistantCaption}</p>}
+          {userCaption.trim().length > 0 && (
+            <p className="text-sm text-ink-muted">Você: {userCaption}</p>
+          )}
+          {assistantCaption.trim().length === 0 &&
+            userCaption.trim().length === 0 &&
+            liveStatus === "live" && (
+              <p className="text-lg text-ink-muted">
+                {isMicMuted ? "Microfone silenciado" : "Estou ouvindo..."}
+              </p>
+            )}
+        </div>
 
         {liveStatus === "connecting" && (
           <span className="flex items-center gap-1.5 text-xs text-ink-muted">
@@ -109,11 +129,4 @@ const orbStateFrom = (isListening: boolean, isSpeaking: boolean): VoiceOrbState 
   if (isSpeaking) return "speaking";
   if (isListening) return "listening";
   return "idle";
-};
-
-const captionFor = (liveStatus: string, userCaption: string, assistantCaption: string): string => {
-  if (assistantCaption.trim().length > 0) return assistantCaption;
-  if (userCaption.trim().length > 0) return userCaption;
-  if (liveStatus === "live") return "Estou ouvindo...";
-  return "";
 };

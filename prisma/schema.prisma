@@ -21,11 +21,12 @@ model Message {
   id             String           @id
   conversationId String           @map("conversation_id")
   conversation   Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  role           String
-  type           String
-  createdAt      DateTime         @map("created_at")
-  position       Int
-  contents       MessageContent[]
+  role               String
+  type               String
+  createdAt          DateTime         @map("created_at")
+  position           Int
+  responseDurationMs Int?             @map("response_duration_ms")
+  contents           MessageContent[]
 
   @@index([conversationId, position])
   @@map("messages")

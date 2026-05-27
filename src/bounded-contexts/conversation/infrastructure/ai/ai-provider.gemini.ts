@@ -7,14 +7,21 @@ type GeminiContent = {
   parts: { text: string }[];
 };
 
-type GeminiChunk = { text?: string };
+type GeminiPart = { text?: string; thought?: boolean };
+
+type GeminiChunk = { candidates?: { content?: { parts?: GeminiPart[] } }[] };
+
+type GeminiConfig = {
+  systemInstruction?: string;
+  thinkingConfig?: { includeThoughts?: boolean };
+};
 
 export interface GeminiContentClient {
   models: {
     generateContentStream(args: {
       model: string;
       contents: GeminiContent[];
-      config?: { systemInstruction?: string };
+      config?: GeminiConfig;
     }): Promise<AsyncIterable<GeminiChunk>>;
   };
 }
@@ -35,12 +42,16 @@ export class GeminiAiProvider implements AiProvider {
     const stream = await this.client.models.generateContentStream({
       model: this.model,
       contents: history.map((turn) => this.toContent(turn)),
-      ...(instruction ? { config: { systemInstruction: instruction } } : {}),
+      config: {
+        thinkingConfig: { includeThoughts: true },
+        ...(instruction ? { systemInstruction: instruction } : {}),
+      },
     });
 
     for await (const chunk of stream) {
-      if (chunk.text) {
-        onChunk(chunk.text);
+      for (const part of chunk.candidates?.[0]?.content?.parts ?? []) {
+        if (!part.text) continue;
+        onChunk({ kind: part.thought ? "thought" : "answer", text: part.text });
       }
     }
   }

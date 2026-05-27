@@ -3,72 +3,56 @@ import { act, renderHook } from "@testing-library/react";
 
 import { useMicStream } from "./useMicStream";
 
-type ProcessorNode = {
-  onaudioprocess: ((event: AudioProcessEvent) => void) | null;
-  connect: () => void;
-  disconnect: () => void;
-};
+type WorkletMessage = { data: { pcm: Int16Array; level: number } };
+type WorkletPort = { onmessage: ((event: WorkletMessage) => void) | null };
 
-type AudioProcessEvent = { inputBuffer: { getChannelData: (channel: number) => Float32Array } };
-
-let lastProcessor: ProcessorNode | null = null;
+let lastWorklet: { port: WorkletPort; disconnect: () => void } | null = null;
 const stoppedTracks: boolean[] = [];
 
-const fakeStream = {
-  getTracks: () => [{ stop: () => stoppedTracks.push(true) }],
-};
+const fakeStream = { getTracks: () => [{ stop: () => stoppedTracks.push(true) }] };
 
 class FakeAudioContext {
-  sampleRate: number;
-  destination = {};
-  closed = false;
-
-  constructor(options?: { sampleRate?: number }) {
-    this.sampleRate = options?.sampleRate ?? 16000;
-  }
-
+  state = "running";
+  audioWorklet = { addModule: async () => {} };
   createMediaStreamSource() {
     return { connect: () => {}, disconnect: () => {} };
   }
-
-  createScriptProcessor(): ProcessorNode {
-    lastProcessor = { onaudioprocess: null, connect: () => {}, disconnect: () => {} };
-    return lastProcessor;
-  }
-
   close() {
-    this.closed = true;
+    this.state = "closed";
     return Promise.resolve();
   }
 }
 
-const emitSamples = (samples: number[]) => {
-  lastProcessor?.onaudioprocess?.({
-    inputBuffer: { getChannelData: () => new Float32Array(samples) },
-  });
-};
+class FakeAudioWorkletNode {
+  port: WorkletPort = { onmessage: null };
+  constructor() {
+    lastWorklet = this;
+  }
+  disconnect() {}
+}
+
+const emit = (pcm: Int16Array, level = 0.5) => lastWorklet?.port.onmessage?.({ data: { pcm, level } });
 
 const originalMediaDevices = navigator.mediaDevices;
-const originalAudioContext = (globalThis as { AudioContext?: unknown }).AudioContext;
+const scope = globalThis as { AudioContext?: unknown; AudioWorkletNode?: unknown };
+const originalAudioContext = scope.AudioContext;
+const originalAudioWorkletNode = scope.AudioWorkletNode;
 
-const setMediaDevices = (value: unknown) => {
-  Object.defineProperty(navigator, "mediaDevices", {
-    value,
-    configurable: true,
-    writable: true,
-  });
-};
+const setMediaDevices = (value: unknown) =>
+  Object.defineProperty(navigator, "mediaDevices", { value, configurable: true, writable: true });
 
 beforeEach(() => {
-  lastProcessor = null;
+  lastWorklet = null;
   stoppedTracks.length = 0;
   setMediaDevices({ getUserMedia: async () => fakeStream });
-  (globalThis as { AudioContext?: unknown }).AudioContext = FakeAudioContext;
+  scope.AudioContext = FakeAudioContext;
+  scope.AudioWorkletNode = FakeAudioWorkletNode;
 });
 
 afterEach(() => {
   setMediaDevices(originalMediaDevices);
-  (globalThis as { AudioContext?: unknown }).AudioContext = originalAudioContext;
+  scope.AudioContext = originalAudioContext;
+  scope.AudioWorkletNode = originalAudioWorkletNode;
 });
 
 describe("useMicStream", () => {
@@ -85,7 +69,7 @@ describe("useMicStream", () => {
     expect(result.current.error).toBeNull();
   });
 
-  it("emits PCM16 frames as Int16Array to the onFrame callback", async () => {
+  it("forwards PCM16 frames and the level posted by the capture worklet", async () => {
     const frames: Int16Array[] = [];
     const { result } = renderHook(() => useMicStream());
 
@@ -93,39 +77,13 @@ describe("useMicStream", () => {
       await result.current.start((frame) => frames.push(frame));
     });
 
+    const chunk = Int16Array.from([0, 16383, -16384, 32767]);
     act(() => {
-      emitSamples([0, 0.5, -0.5, 1]);
+      emit(chunk, 0.7);
     });
 
-    expect(frames.length).toBe(1);
-    expect(frames[0]).toBeInstanceOf(Int16Array);
-    expect(frames[0].length).toBe(4);
-    expect(frames[0][0]).toBe(0);
-    expect(frames[0][1]).toBe(Math.round(0.5 * 0x7fff));
-    expect(frames[0][3]).toBe(0x7fff);
-  });
-
-  it("resamples to 16 kHz when the device rate differs", async () => {
-    class HighRateContext extends FakeAudioContext {
-      constructor() {
-        super({ sampleRate: 48000 });
-      }
-    }
-    (globalThis as { AudioContext?: unknown }).AudioContext = HighRateContext;
-
-    const frames: Int16Array[] = [];
-    const { result } = renderHook(() => useMicStream());
-
-    await act(async () => {
-      await result.current.start((frame) => frames.push(frame));
-    });
-
-    act(() => {
-      emitSamples(new Array(48).fill(0.25));
-    });
-
-    expect(frames.length).toBe(1);
-    expect(frames[0].length).toBe(16);
+    expect(frames).toEqual([chunk]);
+    expect(result.current.getLevel()).toBeCloseTo(0.7);
   });
 
   it("stops capturing and releases the microphone tracks", async () => {
@@ -140,6 +98,26 @@ describe("useMicStream", () => {
     });
 
     expect(result.current.isCapturing).toBe(false);
+    expect(stoppedTracks.length).toBeGreaterThan(0);
+  });
+
+  it("releases the microphone even when worklet setup fails (no leak)", async () => {
+    class BlockedContext extends FakeAudioContext {
+      audioWorklet = {
+        addModule: async () => {
+          throw new Error("worklet blocked");
+        },
+      };
+    }
+    scope.AudioContext = BlockedContext;
+    const { result } = renderHook(() => useMicStream());
+
+    await act(async () => {
+      await result.current.start(() => {});
+    });
+
+    expect(result.current.isCapturing).toBe(false);
+    expect(result.current.error).toBeInstanceOf(Error);
     expect(stoppedTracks.length).toBeGreaterThan(0);
   });
 
@@ -160,7 +138,7 @@ describe("useMicStream", () => {
   });
 
   it("sets error when the Web Audio API is unsupported", async () => {
-    (globalThis as { AudioContext?: unknown }).AudioContext = undefined;
+    scope.AudioContext = undefined;
     const { result } = renderHook(() => useMicStream());
 
     await act(async () => {

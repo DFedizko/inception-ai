@@ -2,15 +2,16 @@
 
 import { useLayoutEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
+import { MiniPaginator } from "../pagination";
 import { SelectOption } from "./select-option";
 import { SelectSearch } from "./select-search";
-import { useSelectStore, visibleOptions } from "./select-store";
+import { pageCount, pagedOptions, useSelectStore } from "./select-store";
 
 const maxDropdownHeight = 288;
 
 export const SelectList = () => {
   const state = useSelectStore();
-  const { isOpen, loading, searchable, label } = state;
+  const { isOpen, loading, searchable, label, toolbar, page, setPage } = state;
   const ref = useRef<HTMLDivElement>(null);
   const [openUp, setOpenUp] = useState(false);
 
@@ -25,7 +26,8 @@ export const SelectList = () => {
 
   if (!isOpen) return null;
 
-  const options = visibleOptions(state);
+  const options = pagedOptions(state);
+  const totalPages = pageCount(state);
   const position = openUp ? "bottom-full mb-1.5" : "top-full mt-1.5";
 
   return (
@@ -34,20 +36,22 @@ export const SelectList = () => {
       className={`absolute z-50 ${position} w-full overflow-hidden rounded-lg border border-line bg-panel shadow-xl shadow-black/30`}
     >
       {searchable ? <SelectSearch /> : null}
+      {toolbar ? <div className="border-b border-line px-2 py-2">{toolbar}</div> : null}
       <ul role="listbox" aria-label={label} className="max-h-64 overflow-y-auto p-1">
         {loading ? (
           <li className="flex items-center gap-2 px-2.5 py-3 text-sm text-ink-muted">
             <Loader2 size={14} aria-hidden className="animate-spin" />
-            Loading…
+            Carregando…
           </li>
         ) : options.length === 0 ? (
-          <li className="px-2.5 py-3 text-sm text-ink-muted">No options</li>
+          <li className="px-2.5 py-3 text-sm text-ink-muted">Nenhuma opção</li>
         ) : (
           options.map((option, index) => (
             <SelectOption key={String(option.value)} option={option} index={index} />
           ))
         )}
       </ul>
+      <MiniPaginator page={page + 1} pageCount={totalPages} onChange={(next) => setPage(next - 1)} className="border-t border-line py-1.5" />
     </div>
   );
 };

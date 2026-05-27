@@ -47,7 +47,6 @@
   will-change: transform, opacity;
 }
 
-/* fade — quiet, dependable */
 .fade-in {
   animation: fade-in 0.24s ease forwards;
 }
@@ -71,7 +70,6 @@
   }
 }
 
-/* scale — zoom in with a soft overshoot */
 .scale-in {
   animation: scale-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
@@ -99,7 +97,6 @@
   }
 }
 
-/* slide-up — bottom sheet feel */
 .slide-up-in {
   animation: slide-up-in 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
@@ -127,7 +124,6 @@
   }
 }
 
-/* drawer-right — slides in from the right edge */
 .drawer-right-in {
   animation: drawer-right-in 0.34s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
@@ -155,7 +151,6 @@
   }
 }
 
-/* flip — 3D rotateX, like a sheet of paper flipping down */
 .flip-in {
   animation: flip-in 0.42s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
 }
@@ -187,7 +182,6 @@
   }
 }
 
-/* swing — swings in like a door on a hinge */
 .swing-in {
   animation: swing-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
@@ -219,7 +213,6 @@
   }
 }
 
-/* genie — warps up out of a corner, playful */
 .genie-in {
   animation: genie-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
@@ -254,7 +247,224 @@
   }
 }
 
+.reveal-in {
+  transform-origin: var(--modal-origin, center);
+  animation: reveal-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.reveal-out {
+  transform-origin: var(--modal-origin, center);
+  animation: reveal-out 0.3s ease-in forwards;
+}
+@keyframes reveal-in {
+  from {
+    opacity: 0;
+    transform: translate(var(--modal-from-x, 0), var(--modal-from-y, 0)) scale(0.3);
+  }
+  to {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+}
+@keyframes reveal-out {
+  from {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(var(--modal-from-x, 0), var(--modal-from-y, 0)) scale(0.3);
+  }
+}
+
+.vortex-in {
+  animation: vortex-in 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.vortex-out {
+  animation: vortex-out 0.4s ease-in forwards;
+}
+@keyframes vortex-in {
+  from {
+    opacity: 0;
+    transform: rotate(-220deg) scale(0.15);
+  }
+  to {
+    opacity: 1;
+    transform: rotate(0deg) scale(1);
+  }
+}
+@keyframes vortex-out {
+  from {
+    opacity: 1;
+    transform: rotate(0deg) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: rotate(180deg) scale(0.15);
+  }
+}
+
+.zoom-blur-in {
+  animation: zoom-blur-in 0.42s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.zoom-blur-out {
+  animation: zoom-blur-out 0.3s ease-in forwards;
+}
+@keyframes zoom-blur-in {
+  from {
+    opacity: 0;
+    transform: scale(1.7);
+    filter: blur(26px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
+}
+@keyframes zoom-blur-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.35);
+    filter: blur(18px);
+  }
+}
+
+.iris-in {
+  animation: iris-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.iris-out {
+  animation: iris-out 0.35s ease-in forwards;
+}
+@keyframes iris-in {
+  from {
+    opacity: 0.6;
+    clip-path: circle(0% at 50% 50%);
+    transform: scale(1.06);
+  }
+  to {
+    opacity: 1;
+    clip-path: circle(150% at 50% 50%);
+    transform: scale(1);
+  }
+}
+@keyframes iris-out {
+  from {
+    opacity: 1;
+    clip-path: circle(150% at 50% 50%);
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    clip-path: circle(0% at 50% 50%);
+    transform: scale(1.06);
+  }
+}
+
+.glitch-in {
+  animation: glitch-in 0.45s cubic-bezier(0.5, 0, 0.2, 1) forwards;
+}
+.glitch-out {
+  animation: glitch-out 0.3s steps(4, end) forwards;
+}
+@keyframes glitch-in {
+  0% {
+    opacity: 0;
+    transform: translate(-14px, 7px) skewX(20deg);
+  }
+  20% {
+    opacity: 1;
+    transform: translate(11px, -5px) skewX(-15deg);
+  }
+  40% {
+    transform: translate(-7px, 3px) skewX(9deg);
+  }
+  60% {
+    transform: translate(5px, -2px) skewX(-5deg);
+  }
+  80% {
+    transform: translate(-2px, 1px) skewX(2deg);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(0, 0) skewX(0deg);
+  }
+}
+@keyframes glitch-out {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) skewX(0deg);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(10px, -4px) skewX(-14deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-16px, 6px) skewX(18deg);
+  }
+}
+
+.elastic-in {
+  animation: elastic-in 0.8s linear forwards;
+}
+.elastic-out {
+  animation: elastic-out 0.28s ease-in forwards;
+}
+@keyframes elastic-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  20% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+  35% {
+    transform: scale(0.97);
+  }
+  50% {
+    transform: scale(1.025);
+  }
+  65% {
+    transform: scale(0.99);
+  }
+  80% {
+    transform: scale(1.008);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes elastic-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .vortex-in,
+  .vortex-out,
+  .zoom-blur-in,
+  .zoom-blur-out,
+  .iris-in,
+  .iris-out,
+  .glitch-in,
+  .glitch-out,
+  .elastic-in,
+  .elastic-out,
+  .reveal-in,
+  .reveal-out,
   .backdrop-in,
   .backdrop-out,
   .fade-in,

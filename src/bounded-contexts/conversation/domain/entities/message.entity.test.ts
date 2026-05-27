@@ -30,6 +30,13 @@ describe("Message", () => {
 
     expect(message.isFromAssistant()).toBe(true);
     expect(message.text()).toBe("Hi there");
+    expect(message.responseDurationMs).toBeUndefined();
+  });
+
+  it("records how long the assistant reply took when provided", () => {
+    const message = Message.fromAssistant("Hi there", Modality.text(), 1234);
+
+    expect(message.responseDurationMs).toBe(1234);
   });
 
   it("lets a user send a voice prompt as audio content", () => {

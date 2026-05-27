@@ -77,9 +77,9 @@ describe("FetchHttpClient", () => {
     const client = new FetchHttpClient(fetchFn);
     const decoder = new TextDecoder();
     let assembled = "";
-    for await (const chunk of client.stream("https://api.test/stream", { method: "POST" })) {
+    await client.stream("https://api.test/stream", { method: "POST" }, (chunk) => {
       assembled += decoder.decode(chunk);
-    }
+    });
 
     expect(assembled).toBe("Hello");
   });

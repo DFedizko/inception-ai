@@ -1,7 +1,8 @@
+import type { ReplyChunk, ReplyChunkListener } from "@/bounded-contexts/conversation/application/ports/ai-provider";
 import { errorResponse } from "./error-response";
 
-export const streamingTextResponse = (
-  run: (onChunk: (chunk: string) => void) => Promise<void>,
+export const streamingReplyResponse = (
+  run: (onChunk: ReplyChunkListener) => Promise<void>,
   extraHeaders: Record<string, string> = {},
 ): Promise<Response> => {
   const encoder = new TextEncoder();
@@ -19,29 +20,50 @@ export const streamingTextResponse = (
       streamStarted = true;
       resolve(
         new Response(body, {
-          headers: { "Content-Type": "text/plain; charset=utf-8", ...extraHeaders },
+          headers: { "Content-Type": "application/x-ndjson; charset=utf-8", ...extraHeaders },
         }),
       );
     };
 
-    run((chunk) => {
+    const pushToClient = (chunk: ReplyChunk) => {
       if (!streamStarted) {
         startStreaming();
       }
-      streamController.enqueue(encoder.encode(chunk));
-    })
+      enqueueSafely(streamController, encoder.encode(`${JSON.stringify(chunk)}\n`));
+    };
+
+    run(pushToClient)
       .then(() => {
         if (!streamStarted) {
           startStreaming();
         }
-        streamController.close();
+        closeSafely(streamController);
       })
       .catch((error) => {
         if (streamStarted) {
-          streamController.close();
+          closeSafely(streamController);
         } else {
           resolve(errorResponse(error));
         }
       });
   });
+};
+
+const enqueueSafely = (
+  controller: ReadableStreamDefaultController<Uint8Array>,
+  chunk: Uint8Array,
+): void => {
+  try {
+    controller.enqueue(chunk);
+  } catch {
+    return;
+  }
+};
+
+const closeSafely = (controller: ReadableStreamDefaultController<Uint8Array>): void => {
+  try {
+    controller.close();
+  } catch {
+    return;
+  }
 };

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, mock } from "bun:test";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useState } from "react";
 import { Select } from "./select";
 import type { SelectOption } from "./select.types";
@@ -89,31 +89,31 @@ describe("Select", () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
-  it("filters options when searchable", () => {
+  it("filters options when searchable (after debounce)", async () => {
     render(<ControlledSelect onChange={() => {}} searchable />);
 
     fireEvent.click(screen.getByRole("combobox"));
     fireEvent.change(screen.getByRole("searchbox"), { target: { value: "live" } });
 
-    expect(screen.getAllByRole("option")).toHaveLength(1);
+    await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(1));
     expect(screen.getByRole("option", { name: /Gemini Live/ })).toBeInTheDocument();
   });
 
-  it("shows an empty message when no option matches the search", () => {
+  it("shows an empty message when no option matches the search", async () => {
     render(<ControlledSelect onChange={() => {}} searchable />);
 
     fireEvent.click(screen.getByRole("combobox"));
     fireEvent.change(screen.getByRole("searchbox"), { target: { value: "zzz" } });
 
+    expect(await screen.findByText("Nenhuma opção")).toBeInTheDocument();
     expect(screen.queryAllByRole("option")).toHaveLength(0);
-    expect(screen.getByText("No options")).toBeInTheDocument();
   });
 
   it("shows a loading state instead of options", () => {
     render(<Select label="Model" options={options} value={null} loading onChange={() => {}} />);
 
     fireEvent.click(screen.getByRole("combobox"));
-    expect(screen.getByText("Loading…")).toBeInTheDocument();
+    expect(screen.getByText("Carregando…")).toBeInTheDocument();
     expect(screen.queryAllByRole("option")).toHaveLength(0);
   });
 
@@ -138,6 +138,27 @@ describe("Select", () => {
     expect(screen.getByRole("listbox")).toBeInTheDocument();
     expect(screen.getByRole("option", { name: /Gemini 3.5 Flash/ })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("option", { name: /Gemini Live/ })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("paginates options and hides the paginator when a single page fits", () => {
+    const many: SelectOption<number>[] = Array.from({ length: 5 }, (_, i) => ({ value: i, label: `Model ${i}` }));
+    const Paged = ({ size }: { size?: number }) => (
+      <Select label="Model" options={many} value={null} pageSize={size} onChange={() => {}} />
+    );
+
+    const { rerender } = render(<Paged size={2} />);
+    fireEvent.click(screen.getByRole("combobox"));
+
+    expect(screen.getAllByRole("option")).toHaveLength(2);
+    expect(screen.getByText("1 / 3")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText("Próxima página"));
+    expect(screen.getByText("2 / 3")).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /Model 2/ })).toBeInTheDocument();
+
+    rerender(<Paged size={undefined} />);
+    expect(screen.getAllByRole("option")).toHaveLength(5);
+    expect(screen.queryByText(/\d \/ \d/)).not.toBeInTheDocument();
   });
 
   it("throws when a piece is rendered outside the Root", () => {

@@ -22,43 +22,23 @@ Presentation only — the feature's **root View component** plus its smaller com
 The **root View** is the feature's top-level presentation component that composes the smaller components. Name it `<Feature>View` in **PascalCase** — e.g. `ChatView.tsx` — mirroring how we name the `ViewModel` and the `Model`. We do **not** call it a "Screen". Its child components stay kebab-case (`chat-header.tsx`, `message-list.tsx`).
 
 ### ViewModel
-The presentation logic of the feature: it owns **feature state**, exposes handlers/derived values to the View, and triggers data access. In React the ViewModel is **a hook and/or a Zustand store, not a class** — function components hold state via hooks, so the hook/store *is* the ViewModel. The ViewModel also **loads the feature's gateways** (below) to talk to the backend.
+The feature's presentation logic — **a hook + Zustand store, never a class**. `view-model/` splits into concerns (folders on demand):
 
-**Split the ViewModel into a store and a hook** (each its own folder under `view-model/`, created on demand):
-- **`stores/` — Zustand stores hold state + setters only, no logic.** A store declares the state and the raw setters that mutate it. No business/presentation rules live here. **Default shapes / empty states of the entities it holds live in the store** (built inside its setters), never hand-built in the hook.
-- **The ViewModel hook (directly in `view-model/`, e.g. `useChatViewModel.ts`) holds all the logic.** It reads state and **imports the setters via destructuring**, orchestrates the gateways, and exposes handlers/derived values to the View. The hook is the *only* place setters are consumed.
-- **`gateways/` — the feature's gateways** (port + adapters) live here.
+- **`stores/`** — Zustand: state + setters only, no logic; defaults built in the store.
+- **`gateways/`** — the feature's gateways (port + adapters).
+- **`query/` / `mutation/`** — one hook per read / write, built on **TanStack Query**, each taking the gateway by its **port** (our DIP). `query/` = `useQuery` (inline `queryKey` tag + `enabled`/`staleTime`), syncs `data`/loading into the store, returns `{ <domain>, isPending, error }`. `mutation/` = `useMutation` + `useQueryClient` (`mutationFn` sets state, `onSuccess` invalidates tags). **The hook owns the outcome of its call** — it `notify`s its own error (query: effect on `error`; mutation: `onError`) and success, since handling the HTTP result is the same responsibility as making the call (like a backend adapter throwing for the framework — here the "framework" is the notification UI). No sequencing/business rules; touch only setters. Cache by tag — skip only ephemeral reads (e.g. a live token, a mutation).
+- **`use<Feature>ViewModel` = orchestration only** (the frontend "use case"), **no `try/catch` and no error handling**: it consumes the hooks, syncs `data`→store, derives flags (e.g. `isReplying` from `isPending`), and exposes handlers that just trigger queries/mutations.
 
-**State-access rule — who reads what:**
-- **Setters are private to the ViewModel hook.** Components, the View, and pages **never import setters** — all mutation goes through the hook's handlers, so the logic stays in one place.
-- **Components / View / pages read state (non-setters) directly from the store** via destructuring, and get behavior (handlers) from the ViewModel hook.
-- **Always consume a Zustand store by destructuring** — `const { messages, isReplying } = useChatStore()` — never one `useStore(s => s.x)` selector line per field.
+A stateful non-fetch concern (e.g. live voice: connector + mic/sink) gets its **own concern hook** (`live/useLiveSession.ts`) that orchestrates and reuses the query/mutation hooks.
 
-```ts
-// stores/chat.store.ts — state + setters only; defaults built here, not in the hook
-export const useChatStore = create<ChatStore>((set) => ({
-  messages: [],
-  isReplying: false,
-  addUserMessage: (content) => set((s) => ({ messages: [...s.messages, userMessage(content)] })),
-  setReplying: (isReplying) => set({ isReplying }),
-}));
-
-// useChatViewModel.ts — the hook: imports setters via destructuring, owns the logic
-export const useChatViewModel = () => {
-  const { isReplying, addUserMessage, setReplying } = useChatStore();
-  const sendMessage = async (content: string) => { /* logic + gateway */ };
-  return { sendMessage };
-};
-
-// view/components/message-list.tsx — reads STATE, never setters
-const { messages } = useChatStore();
-```
+**Who reads what:** components/View/pages read state (non-setters) from the store by **destructuring** (`const { messages } = useChatStore()`, never per-field selectors); setters stay private to the view-model layer.
 
 ### Model
-A **read model / mirror** of the backend **entities/aggregates**: a rich shape but **no behavior** (behavior lives in the backend). Gateways map backend DTOs into these read models. The frontend holds *presentation* rules, not business rules.
+A **mirror** of the backend **entities/aggregates** that **carries behavior** — the *few* rules that genuinely belong on the frontend. The bulk of the business rules live in the backend; a Model holds only what is **frontend-only** or trivially derivable from its own data, so views/viewmodels stop re-deriving it. Gateways map backend DTOs into these Models.
 
-- **Only entity/aggregate mirrors are Models** — name them `<concept>.model.ts` (e.g. `conversation.model.ts`, `message.model.ts`, `conversation-summary.model.ts`). The token mirrors how we name the View (`<Feature>View`) and the ViewModel hook (`useChatViewModel`).
-- **The frontend has no value objects.** A backend value object (e.g. `Type`, `Role`) carries behavior there; on the frontend it collapses to a **plain union/literal field type** with no behavior — so it is **not** a Model and gets **no `.model.ts` file**. Declare it **inline in (and export it from) the read model that uses it** (e.g. `Role` and `Type` live in `message.model.ts` next to `Message`). Only promote a union to its own file if it's genuinely shared across several models — and even then name it for what it is (a shared type), never `.model.ts`.
+- **Models with behavior are classes; data-only mirrors stay `type`s.** A Model becomes a `class` the moment it has cohesive frontend rules to own — e.g. `AiModel.isLive()` instead of scattering `capabilities.includes("live")`, or `Message.isFromUser()`/`media()` instead of inlining `role === "user"` in a view. No such rules → keep it a plain `type` (`Conversation`, `ConversationSummary`). Don't force behavior that isn't there. *(Reference: Fowler, [Modularizing React Apps](https://martinfowler.com/articles/modularizing-react-apps.html).)*
+- **Class Models use constructor parameter properties** (`constructor(readonly id: UUID, …) {}`), method syntax, and stay immutable (a mutation returns a *new* instance, e.g. `withAppended`).
+- **Only entity/aggregate mirrors are Models** — name them `<concept>.model.ts`. Mere *channel/label* VOs (e.g. `Type`, `Role`) collapse to a **plain union** inline in the Model — no class, no `.model.ts`; VOs with validation/identity are classes in `shared/value-objects/` (see below).
 
 ## Hooks
 A ViewModel *is* a hook, but **not every hook is a ViewModel**. Generic, domain-agnostic hooks (`useDebounce`, `useMediaQuery`, …) are reusable presentation tools that ViewModels *compose* — they live in frontend `shared/hooks`, not inside a feature. They don't break MVVM; they're inputs to the ViewModel.
@@ -68,6 +48,10 @@ The frontend gets DIP too. Generic, reusable adapters live in frontend `shared` 
 - `shared/http` — an `HttpClient` port with `fetch`/`axios` adapters.
 - `shared/storage` — ports for cookies / localStorage / sessionStorage / IndexedDB, each with its adapter.
 - `shared/utils` — reusable pure helpers (e.g. `formatDate`), `shared/hooks` — generic hooks, `shared/ui` — design-system primitives.
+- `shared/value-objects` — cross-feature **value objects** (see below).
+
+### Value objects
+VOs that carry **validation or identity** live in `shared/value-objects/` as **immutable classes** with a **private constructor** and a **static `create` factory** that validates and returns the instance (e.g. `UUID.create(value)`). Use them on Models (e.g. an id typed `UUID`); cross to primitive boundaries (paths, query keys, store) with `.value`.
 
 **Gateways** (we say *gateway*, not "service" — "service" is reserved for the backend) call backend routes and map DTOs into read models. A **feature-specific gateway** lives in that feature's `view-model/gateways/` and depends only on the shared ports, never on a concrete client (so tests inject fakes). A gateway used by **multiple features** is **promoted** to `shared/gateways`.
 
@@ -84,7 +68,7 @@ export class HttpGateway implements Gateway {
 }
 ```
 
-**Hooks, utils, and Zustand stores stay functional** — class methods are the intended exception to the global "always arrow functions" rule, only for these adapters.
+**Hooks, utils, and Zustand stores stay functional** — class methods are the intended exception to the global "always arrow functions" rule, alongside **Models with behavior** and **value objects** (the other two kinds of frontend classes).
 
 ## Reuse & promotion
 Components/hooks/gateways used by only one feature live inside that feature; generic primitives (design system, utility hooks, http/storage adapters) live in `shared`. When something starts being reused across features, **promote** it into `shared` rather than importing across features.
@@ -127,6 +111,25 @@ import { ButtonLabel } from "./button-label";
 <ButtonRoot><ButtonIcon /><ButtonLabel>Save</ButtonLabel></ButtonRoot>
 ```
 
+- **`"use client"` hoisted onto a View or page.** A View/page that only *composes* must stay a **Server Component** (no directive). Putting `"use client"` at the top makes the whole subtree client and kills Server Components below it — nothing can render server-side anymore. **Server by default; push `"use client"` down to the leaf** that actually needs state, an effect, a store read, or an event handler — and split a component when only *part* of it needs the client (a server shell wrapping a small client leaf).
+
+```tsx
+// avoid — the whole view is client just to read `mode` from the store
+"use client";
+export const ChatView = () => {
+  const { mode } = useChatStore();
+  return <Layout>{mode === "voice" ? <VoiceStage/> : <Messages/>}</Layout>;
+};
+// instead — View stays a Server Component; the store read lives in a client leaf
+export const ChatView = () => <Layout><ChatBody/></Layout>;        // no directive
+// chat-body.tsx
+"use client";
+export const ChatBody = () => {
+  const { mode } = useChatStore();
+  return mode === "voice" ? <VoiceStage/> : <Messages/>;
+};
+```
+
 ## Component file conventions
 
 - **One component per file.** Never declare two component constants/functions in the same file.
@@ -151,6 +154,7 @@ const initials = (name: string) => name.charAt(0).toUpperCase();
 - **Model files: `<concept>.model.ts`** for entity/aggregate mirrors (e.g. `conversation.model.ts`). Value-object-shaped unions get no `.model.ts` file — inline them in the model that uses them (see *Model* above).
 - **Pages / route files: exactly what Next dictates** (`page.tsx`, `layout.tsx`, `route.ts`, etc.).
 - **Gateways** (Next doesn't opine on these): kebab-case with a dotted type token — port `<concept>.gateway.ts` (e.g. `conversation.gateway.ts`); concrete adapter adds the provider, `<concept>.<provider>.gateway.ts`.
+- **Query/mutation & concern hooks: camelCase `use<Operation>.ts`**, named for the operation — `useListConversations.ts`, `useSendMessage.ts`, `useLiveSession.ts` (mirrors `useChatViewModel`).
 
 ## Testing (TDD)
 
@@ -168,11 +172,12 @@ We work the **test pyramid**: many cheap unit tests at the base, fewer integrati
 ```
 
 - **Unit (`bun test`).** Bun's built-in runner — no external runner. Test pure, isolated logic: store reducers/setters, ViewModel helpers, gateway DTO→read-model mapping. Fast, no DOM.
-- **Integration of units (React Testing Library + happy-dom).** Render a feature (View + ViewModel + store + a **fake gateway**) and exercise it the way a user does — type, click, await streamed output — asserting on the rendered DOM. `happy-dom` provides the DOM to `bun test`; **RTL drives and queries it**. Prefer **role/text queries** (`getByRole`, `findByText`, `getByPlaceholderText`) over test ids. Inject a **fake/mock gateway** so tests never hit the network.
+- **Integration of units (React Testing Library + happy-dom).** Two flavours: (a) **feature** — render the View + ViewModel + store and drive the DOM (`getByRole`/`findByText`), wrapping in `buildQueryWrapper()` so TanStack has a client; (b) **hook** — `renderHook` a `query/`/`mutation/` hook with the **real HTTP gateway** and intercept the request with **MSW**, asserting on the store and the returned `{ data, isPending, error }`. Prefer role/text queries over test ids.
+- **MSW (`msw`) for the HTTP boundary.** `query/`/`mutation/` hook tests don't fake the gateway — they let the real gateway hit `fetch` and **MSW returns the response**, so the gateway's DTO→model mapping is covered too. Mock **data only** (objects/arrays of DTOs — no library code) lives in `view-model/mocks/<gateway>/` (one folder per gateway). Register per-test handlers with `server.use(http.get(...))`.
 
 **Setup (already wired — keep it standardized):**
-- Dev deps: `@happy-dom/global-registrator`, `@testing-library/react`, `@testing-library/dom`, `@testing-library/jest-dom`.
-- `bunfig.toml` → `[test] preload = ["./happydom.ts", "./testing-library.ts"]` registers the DOM and extends `expect` with jest-dom matchers; `matchers.d.ts` adds their types.
+- Dev deps: `@happy-dom/global-registrator`, `@testing-library/react`, `@testing-library/dom`, `@testing-library/jest-dom`, `msw`.
+- `bunfig.toml` → `[test] preload = ["./happydom.ts", "./testing-library.ts", "./src/test/msw.ts"]` registers the DOM, the jest-dom matchers, and the MSW server (`listen`/`resetHandlers`/`close`). `src/test/server.ts` exports the server; `src/test/renderWithProviders.tsx` exports `buildQueryWrapper()`.
 - **A test always sits right beside the file it tests** — never in a separate tests folder, never at the feature root. The feature root stays clean (`view`, `view-model`, `model` only). A store's unit test lives next to the store (`chat.store.test.ts` beside `chat.store.ts`); a feature's integration test lives next to the root View it renders (`ChatView.integration.test.tsx` beside `ChatView.tsx`). Name the file after its subject + `.test.ts` (unit) or `.integration.test.tsx` (integration).
 
 ```tsx

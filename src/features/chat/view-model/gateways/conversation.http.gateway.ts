@@ -2,11 +2,15 @@ import type { HttpClient } from "@/features/shared/http/http-client";
 
 import type { Conversation } from "../../model/conversation.model";
 import type { ConversationSummary } from "../../model/conversation-summary.model";
-import type { Content, Message, Role, Type } from "../../model/message.model";
+import { UUID } from "@/features/shared/value-objects/uuid";
+
+import { Message, type Content, type Role, type Type } from "../../model/message.model";
 import type { RecordedAudio } from "../audio/voice-recorder.ports";
 import type {
+  AssistantReplyChunk,
   ConversationGateway,
   LiveToken,
+  ReplyChunkConsumer,
   TurnInput,
 } from "./conversation.gateway";
 
@@ -48,18 +52,25 @@ export class HttpConversationGateway implements ConversationGateway {
     return this.toConversation(await this.http.get<ConversationDTO>(`${this.path}/${id}`));
   }
 
-  beginConversation(
+  async beginConversation(
     content: string,
     onConversationId: (conversationId: string) => void,
-  ): AsyncIterable<string> {
-    return this.http.stream(this.path, {
-      method: "POST",
-      body: { content, type: "text" satisfies Type },
-      onResponse: (response) => {
-        const id = response.headers.get("x-conversation-id");
-        if (id) onConversationId(id);
+    onReply: ReplyChunkConsumer,
+  ): Promise<void> {
+    const state = { buffer: "" };
+    await this.http.stream(
+      this.path,
+      {
+        method: "POST",
+        body: { content, type: "text" satisfies Type },
+        onResponse: (response) => {
+          const id = response.headers.get("x-conversation-id");
+          if (id) onConversationId(id);
+        },
       },
-    });
+      (fragment) => this.absorb(state, fragment, onReply),
+    );
+    this.flush(state, onReply);
   }
 
   async beginConversationWithTurns(turns: TurnInput[]): Promise<Conversation> {
@@ -68,15 +79,41 @@ export class HttpConversationGateway implements ConversationGateway {
     );
   }
 
-  streamAssistantReply(conversationId: string, content: string): AsyncIterable<string> {
-    return this.http.stream(`${this.path}/${conversationId}/messages`, {
-      method: "POST",
-      body: { content, type: "text" satisfies Type },
-    });
+  async streamAssistantReply(
+    conversationId: string,
+    content: string,
+    onReply: ReplyChunkConsumer,
+  ): Promise<void> {
+    const state = { buffer: "" };
+    await this.http.stream(
+      `${this.path}/${conversationId}/messages`,
+      {
+        method: "POST",
+        body: { content, type: "text" satisfies Type },
+      },
+      (fragment) => this.absorb(state, fragment, onReply),
+    );
+    this.flush(state, onReply);
   }
 
-  async issueLiveToken(): Promise<LiveToken> {
-    const dto = await this.http.post<LiveTokenDTO>(this.tokenPath);
+  private absorb(state: { buffer: string }, fragment: string, onReply: ReplyChunkConsumer): void {
+    const lines = (state.buffer + fragment).split("\n");
+    state.buffer = lines.pop() ?? "";
+    lines.forEach((line) => this.emitLine(line, onReply));
+  }
+
+  private flush(state: { buffer: string }, onReply: ReplyChunkConsumer): void {
+    this.emitLine(state.buffer, onReply);
+  }
+
+  private emitLine(line: string, onReply: ReplyChunkConsumer): void {
+    const trimmed = line.trim();
+    if (trimmed.length === 0) return;
+    onReply(JSON.parse(trimmed) as AssistantReplyChunk);
+  }
+
+  async issueLiveToken(instruction?: string | null): Promise<LiveToken> {
+    const dto = await this.http.post<LiveTokenDTO>(this.tokenPath, { instruction: instruction ?? null });
     return { token: dto.token, expiresAt: dto.expiresAt, model: dto.model };
   }
 
@@ -125,12 +162,12 @@ export class HttpConversationGateway implements ConversationGateway {
   }
 
   private toSummary(dto: ConversationSummaryDTO): ConversationSummary {
-    return { id: dto.id, title: dto.title, createdAt: dto.createdAt };
+    return { id: UUID.create(dto.id), title: dto.title, createdAt: dto.createdAt };
   }
 
   private toConversation(dto: ConversationDTO): Conversation {
     return {
-      id: dto.id,
+      id: UUID.create(dto.id),
       title: dto.title,
       createdAt: dto.createdAt,
       instruction: dto.instruction,
@@ -139,13 +176,13 @@ export class HttpConversationGateway implements ConversationGateway {
   }
 
   private toMessage(dto: MessageDTO): Message {
-    return {
-      id: dto.id,
-      role: dto.role,
-      type: dto.type,
-      content: dto.content,
-      contents: dto.contents ?? [],
-      createdAt: dto.createdAt,
-    };
+    return new Message(
+      UUID.create(dto.id),
+      dto.role,
+      dto.type,
+      dto.content,
+      dto.createdAt,
+      dto.contents ?? [],
+    );
   }
 }

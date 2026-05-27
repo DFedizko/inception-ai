@@ -114,8 +114,8 @@ export class ConversationController {
     return toConversationDTO(conversation);
   }
 
-  async issueLiveToken(): Promise<LiveTokenDTO> {
-    const token = await this.issueLiveTokenUseCase.execute();
+  async issueLiveToken(instruction?: string | null): Promise<LiveTokenDTO> {
+    const token = await this.issueLiveTokenUseCase.execute(instruction);
     return { token: token.token, expiresAt: token.expiresAt, model: token.model };
   }
 

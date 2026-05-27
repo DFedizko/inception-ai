@@ -4,10 +4,20 @@ import { errorResponse } from "../../error-response";
 
 export const dynamic = "force-dynamic";
 
-export const POST = async (): Promise<Response> => {
+export const POST = async (request: Request): Promise<Response> => {
   try {
-    return Response.json(await container.get(ConversationController).issueLiveToken());
+    const { instruction } = await readInstruction(request);
+    return Response.json(await container.get(ConversationController).issueLiveToken(instruction));
   } catch (error) {
     return errorResponse(error);
+  }
+};
+
+const readInstruction = async (request: Request): Promise<{ instruction?: string | null }> => {
+  try {
+    const body = (await request.json()) as { instruction?: string | null };
+    return { instruction: body.instruction ?? null };
+  } catch {
+    return { instruction: null };
   }
 };

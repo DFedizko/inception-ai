@@ -41,7 +41,7 @@ describe("ConversationRepositoryPrisma", () => {
     const repository = new ConversationRepositoryPrisma(prisma);
     const conversation = Conversation.start();
     conversation.recordUserMessage("Hello", Modality.text());
-    conversation.recordAssistantReply("Hi there", Modality.text());
+    conversation.recordAssistantReply("Hi there", Modality.text(), 1500);
     await repository.save(conversation);
 
     const reloaded = await repository.findById(conversation.id);
@@ -51,6 +51,8 @@ describe("ConversationRepositoryPrisma", () => {
     expect(reloaded?.messages.map((message) => message.text())).toEqual(["Hello", "Hi there"]);
     expect(reloaded?.messages[0]?.isFromUser()).toBe(true);
     expect(reloaded?.messages[1]?.isFromAssistant()).toBe(true);
+    expect(reloaded?.messages[0]?.responseDurationMs).toBeUndefined();
+    expect(reloaded?.messages[1]?.responseDurationMs).toBe(1500);
   });
 
   it("returns null for an unknown id", async () => {

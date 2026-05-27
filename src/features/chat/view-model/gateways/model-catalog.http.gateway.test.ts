@@ -4,6 +4,7 @@ import type {
   HttpClient,
   HttpRequestConfig,
 } from "@/features/shared/http/http-client";
+import { AiModel } from "../../model/ai-model.model";
 import { HttpModelCatalogGateway } from "./model-catalog.http.gateway";
 
 const fakeHttpClient = (response: unknown): { client: HttpClient; urls: string[] } => {
@@ -35,13 +36,8 @@ describe("http model catalog gateway", () => {
 
     expect(urls[0]).toBe("/api/models");
     expect(models).toEqual([
-      { id: "gemini-3.5-flash", label: "Gemini 3.5 Flash", capabilities: ["text"], tier: "free" },
-      {
-        id: "gemini-2.5-flash-preview-tts",
-        label: "Gemini 2.5 Flash TTS",
-        capabilities: ["text", "speech"],
-        tier: "paid",
-      },
+      new AiModel("gemini-3.5-flash", "Gemini 3.5 Flash", ["text"], "free"),
+      new AiModel("gemini-2.5-flash-preview-tts", "Gemini 2.5 Flash TTS", ["text", "speech"], "paid"),
     ]);
   });
 

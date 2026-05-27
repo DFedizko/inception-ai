@@ -7,3 +7,4 @@ export * from "./markdown";
 export * from "./layout";
 export * from "./skeleton";
 export * from "./sidebar";
+export * from "./pagination";

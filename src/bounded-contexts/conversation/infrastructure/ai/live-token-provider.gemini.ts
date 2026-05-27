@@ -1,13 +1,24 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Modality } from "@google/genai";
 import type { LiveToken, LiveTokenProvider } from "../../application/ports/live-token-provider";
 
 type CreatedAuthToken = { name?: string };
+
+type LiveConnectConfig = {
+  responseModalities: Modality[];
+  inputAudioTranscription: Record<string, never>;
+  outputAudioTranscription: Record<string, never>;
+  speechConfig: {
+    languageCode: string;
+    voiceConfig: { prebuiltVoiceConfig: { voiceName: string } };
+  };
+  systemInstruction?: string;
+};
 
 type AuthTokenCreateConfig = {
   uses: number;
   expireTime: string;
   newSessionExpireTime: string;
-  liveConnectConstraints: { model: string };
+  liveConnectConstraints: { model: string; config: LiveConnectConfig };
   httpOptions: { apiVersion: string };
 };
 
@@ -17,7 +28,9 @@ export interface GeminiAuthTokenClient {
   };
 }
 
-const defaultLiveModel = "gemini-3.1-flash-live-preview";
+const defaultLiveModel = "gemini-2.5-flash-native-audio-preview-12-2025";
+const defaultVoice = "Aoede";
+const defaultLanguage = "pt-BR";
 const sessionWindowMs = 30 * 60 * 1000;
 const newSessionWindowMs = 60 * 1000;
 
@@ -27,14 +40,14 @@ export class GeminiLiveTokenProvider implements LiveTokenProvider {
     private readonly model: string = process.env.GEMINI_LIVE_MODEL ?? defaultLiveModel,
   ) {}
 
-  async mint(): Promise<LiveToken> {
+  async mint(instruction?: string | null): Promise<LiveToken> {
     const expireTime = new Date(Date.now() + sessionWindowMs).toISOString();
     const created = await this.client.authTokens.create({
       config: {
         uses: 1,
         expireTime,
         newSessionExpireTime: new Date(Date.now() + newSessionWindowMs).toISOString(),
-        liveConnectConstraints: { model: this.model },
+        liveConnectConstraints: { model: this.model, config: this.sessionConfig(instruction) },
         httpOptions: { apiVersion: "v1alpha" },
       },
     });
@@ -44,6 +57,19 @@ export class GeminiLiveTokenProvider implements LiveTokenProvider {
     }
 
     return { token: created.name, expiresAt: expireTime, model: this.model };
+  }
+
+  private sessionConfig(instruction?: string | null): LiveConnectConfig {
+    return {
+      responseModalities: [Modality.AUDIO],
+      inputAudioTranscription: {},
+      outputAudioTranscription: {},
+      speechConfig: {
+        languageCode: defaultLanguage,
+        voiceConfig: { prebuiltVoiceConfig: { voiceName: defaultVoice } },
+      },
+      ...(instruction ? { systemInstruction: instruction } : {}),
+    };
   }
 }
 

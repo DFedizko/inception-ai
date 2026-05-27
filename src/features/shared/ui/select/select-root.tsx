@@ -13,6 +13,8 @@ type SharedProps<T> = {
   searchable?: boolean;
   loading?: boolean;
   disabled?: boolean;
+  pageSize?: number;
+  toolbar?: ReactNode;
   placeholder?: string;
   label?: string;
   className?: string;
@@ -49,6 +51,8 @@ export const SelectRoot = <T,>(props: SelectRootProps<T>) => {
       searchable,
       loading,
       disabled,
+      pageSize: props.pageSize,
+      toolbar: props.toolbar,
       placeholder: props.placeholder,
       label: props.label,
       emit: (values) =>
@@ -56,7 +60,7 @@ export const SelectRoot = <T,>(props: SelectRootProps<T>) => {
           ? (onChange as SelectMultipleChange<T>)(values)
           : (onChange as SelectChange<T>)(values[0]),
     }),
-    [options, multiple, value, onChange, searchable, loading, disabled, props.placeholder, props.label],
+    [options, multiple, value, onChange, searchable, loading, disabled, props.pageSize, props.toolbar, props.placeholder, props.label],
   );
 
   const storeRef = useRef(createSelectStore(config));

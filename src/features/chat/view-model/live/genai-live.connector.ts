@@ -1,4 +1,4 @@
-import { GoogleGenAI, Modality } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 
 import type {
   LiveSession,
@@ -18,7 +18,7 @@ type ServerMessage = {
 };
 
 type GenAiSession = {
-  sendRealtimeInput(input: { media: { data: string; mimeType: string } }): void;
+  sendRealtimeInput(input: { audio: { data: string; mimeType: string } }): void;
   sendClientContent(input: {
     turns: { role: string; parts: { text: string }[] }[];
     turnComplete?: boolean;
@@ -61,12 +61,7 @@ export class GenAiLiveConnector implements LiveSessionConnector {
     const client = this.createClient(config.token);
     const session = await client.live.connect({
       model: config.model,
-      config: {
-        responseModalities: [Modality.AUDIO],
-        inputAudioTranscription: {},
-        outputAudioTranscription: {},
-        ...(config.instruction ? { systemInstruction: config.instruction } : {}),
-      },
+      config: {},
       callbacks: {
         onmessage: (message) => this.handleMessage(message, callbacks),
         onerror: (error) =>
@@ -88,7 +83,7 @@ export class GenAiLiveConnector implements LiveSessionConnector {
     return {
       sendAudioFrame: (frame) =>
         session.sendRealtimeInput({
-          media: { data: encodePcm(frame), mimeType: INPUT_MIME_TYPE },
+          audio: { data: encodePcm(frame), mimeType: INPUT_MIME_TYPE },
         }),
       sendText: (text) =>
         session.sendClientContent({

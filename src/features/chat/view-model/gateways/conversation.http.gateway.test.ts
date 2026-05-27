@@ -4,7 +4,19 @@ import type {
   HttpClient,
   HttpStreamConfig,
 } from "@/features/shared/http/http-client";
+import { UUID } from "@/features/shared/value-objects/uuid";
+import { Message } from "../../model/message.model";
+import type { AssistantReplyChunk } from "./conversation.gateway";
 import { HttpConversationGateway } from "./conversation.http.gateway";
+
+const uuid = {
+  a: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  b: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+  c1: "c1c1c1c1-c1c1-4c1c-8c1c-c1c1c1c1c1c1",
+  m1: "11111111-1111-4111-8111-111111111111",
+  u1: "22222222-2222-4222-8222-222222222222",
+  a1: "33333333-3333-4333-8333-333333333333",
+};
 
 type Recorder = {
   get: { url: string }[];
@@ -36,14 +48,18 @@ const fakeHttpClient = (
       calls.put.push({ url, body });
       return responses.put;
     },
-    stream: async function* (url: string, config?: HttpStreamConfig) {
+    stream: async (
+      url: string,
+      config: HttpStreamConfig | undefined,
+      onChunk: (chunk: string) => void,
+    ) => {
       calls.stream.push({ url, config });
       if (responses.streamConversationId) {
         config?.onResponse?.(
           new Response(null, { headers: { "x-conversation-id": responses.streamConversationId } }),
         );
       }
-      for (const chunk of responses.stream ?? []) yield chunk;
+      (responses.stream ?? []).forEach((fragment) => onChunk(fragment));
     },
   } as unknown as HttpClient;
   return { client, calls };
@@ -54,8 +70,8 @@ describe("http conversation gateway", () => {
     const { client, calls } = fakeHttpClient({
       get: {
         conversations: [
-          { id: "b", title: "Sobre TDD", createdAt: "2026-05-25T10:00:00.000Z" },
-          { id: "a", title: "Nova conversa", createdAt: "2026-05-25T09:00:00.000Z" },
+          { id: uuid.b, title: "Sobre TDD", createdAt: "2026-05-25T10:00:00.000Z" },
+          { id: uuid.a, title: "Nova conversa", createdAt: "2026-05-25T09:00:00.000Z" },
         ],
       },
     });
@@ -64,36 +80,38 @@ describe("http conversation gateway", () => {
 
     expect(calls.get[0].url).toBe("/api/conversations");
     expect(summaries).toEqual([
-      { id: "b", title: "Sobre TDD", createdAt: "2026-05-25T10:00:00.000Z" },
-      { id: "a", title: "Nova conversa", createdAt: "2026-05-25T09:00:00.000Z" },
+      { id: UUID.create(uuid.b), title: "Sobre TDD", createdAt: "2026-05-25T10:00:00.000Z" },
+      { id: UUID.create(uuid.a), title: "Nova conversa", createdAt: "2026-05-25T09:00:00.000Z" },
     ]);
   });
 
   it("begins a conversation: streams the reply and announces the new id from the header", async () => {
     const { client, calls } = fakeHttpClient({
-      stream: ["Olá", " mundo"],
+      stream: ['{"kind":"answer","text":"Olá"}\n', '{"kind":"answer","text":" mundo"}\n'],
       streamConversationId: "c1",
     });
     const announced: string[] = [];
-    const chunks: string[] = [];
+    const chunks: AssistantReplyChunk[] = [];
 
-    for await (const chunk of new HttpConversationGateway(client).beginConversation(
+    await new HttpConversationGateway(client).beginConversation(
       "Oi",
       (id) => announced.push(id),
-    )) {
-      chunks.push(chunk);
-    }
+      (chunk) => chunks.push(chunk),
+    );
 
     expect(calls.stream[0].url).toBe("/api/conversations");
     expect(calls.stream[0].config?.method).toBe("POST");
     expect(announced).toEqual(["c1"]);
-    expect(chunks).toEqual(["Olá", " mundo"]);
+    expect(chunks).toEqual([
+      { kind: "answer", text: "Olá" },
+      { kind: "answer", text: " mundo" },
+    ]);
   });
 
   it("begins a conversation with voice turns mapped into a read model", async () => {
     const { client, calls } = fakeHttpClient({
       post: {
-        id: "c1",
+        id: uuid.c1,
         title: "Olá",
         createdAt: "2026-05-25T10:00:00.000Z",
         instruction: null,
@@ -106,18 +124,18 @@ describe("http conversation gateway", () => {
     ]);
 
     expect(calls.post[0].url).toBe("/api/conversations/turns");
-    expect(conversation.id).toBe("c1");
+    expect(conversation.id.value).toBe(uuid.c1);
   });
 
   it("gets a conversation with its messages mapped", async () => {
     const { client, calls } = fakeHttpClient({
       get: {
-        id: "c1",
+        id: uuid.c1,
         title: "Sobre TDD",
         createdAt: "2026-05-25T10:00:00.000Z",
         messages: [
           {
-            id: "m1",
+            id: uuid.m1,
             role: "user",
             type: "text",
             content: "oi",
@@ -130,26 +148,21 @@ describe("http conversation gateway", () => {
     const conversation = await new HttpConversationGateway(client).getConversation("c1");
 
     expect(calls.get[0].url).toBe("/api/conversations/c1");
-    expect(conversation.messages[0]).toEqual({
-      id: "m1",
-      role: "user",
-      type: "text",
-      content: "oi",
-      contents: [],
-      createdAt: "2026-05-25T10:00:01.000Z",
-    });
+    expect(conversation.messages[0]).toEqual(
+      new Message(UUID.create(uuid.m1), "user", "text", "oi", "2026-05-25T10:00:01.000Z", []),
+    );
   });
 
   it("generates an image via POST and maps the image content", async () => {
     const { client, calls } = fakeHttpClient({
       post: {
-        id: "c1",
+        id: uuid.c1,
         title: "Desenhe um gato",
         createdAt: "2026-05-25T10:00:00.000Z",
         instruction: null,
         messages: [
           {
-            id: "u1",
+            id: uuid.u1,
             role: "user",
             type: "text",
             content: "Desenhe um gato",
@@ -157,7 +170,7 @@ describe("http conversation gateway", () => {
             createdAt: "2026-05-25T10:00:01.000Z",
           },
           {
-            id: "a1",
+            id: uuid.a1,
             role: "assistant",
             type: "text",
             content: "",
@@ -180,22 +193,40 @@ describe("http conversation gateway", () => {
   });
 
   it("streams the assistant reply via POST with the text message body", async () => {
-    const { client, calls } = fakeHttpClient({ stream: ["Olá", " mundo"] });
+    const { client, calls } = fakeHttpClient({
+      stream: ['{"kind":"answer","text":"Olá"}\n', '{"kind":"answer","text":" mundo"}\n'],
+    });
 
-    const chunks: string[] = [];
-    for await (const chunk of new HttpConversationGateway(client).streamAssistantReply(
-      "c1",
-      "oi",
-    )) {
-      chunks.push(chunk);
-    }
+    const chunks: AssistantReplyChunk[] = [];
+    await new HttpConversationGateway(client).streamAssistantReply("c1", "oi", (chunk) =>
+      chunks.push(chunk),
+    );
 
-    expect(chunks).toEqual(["Olá", " mundo"]);
+    expect(chunks).toEqual([
+      { kind: "answer", text: "Olá" },
+      { kind: "answer", text: " mundo" },
+    ]);
     expect(calls.stream[0].url).toBe("/api/conversations/c1/messages");
     expect(calls.stream[0].config).toMatchObject({
       method: "POST",
       body: { content: "oi", type: "text" },
     });
+  });
+
+  it("reassembles ndjson chunks split across stream fragments and flushes the tail", async () => {
+    const { client } = fakeHttpClient({
+      stream: ['{"kind":"thou', 'ght","text":"hmm"}\n{"kind":"answer","text":"oi"}'],
+    });
+
+    const chunks: AssistantReplyChunk[] = [];
+    await new HttpConversationGateway(client).streamAssistantReply("c1", "oi", (chunk) =>
+      chunks.push(chunk),
+    );
+
+    expect(chunks).toEqual([
+      { kind: "thought", text: "hmm" },
+      { kind: "answer", text: "oi" },
+    ]);
   });
 
   it("issues a live token via POST and maps the DTO", async () => {
@@ -220,19 +251,19 @@ describe("http conversation gateway", () => {
   it("records turns via POST and returns the updated conversation", async () => {
     const { client, calls } = fakeHttpClient({
       post: {
-        id: "c1",
+        id: uuid.c1,
         title: "Sobre voz",
         createdAt: "2026-05-25T10:00:00.000Z",
         messages: [
           {
-            id: "u1",
+            id: uuid.u1,
             role: "user",
             type: "voice",
             content: "olá",
             createdAt: "2026-05-25T10:00:01.000Z",
           },
           {
-            id: "a1",
+            id: uuid.a1,
             role: "assistant",
             type: "voice",
             content: "oi!",
@@ -260,7 +291,7 @@ describe("http conversation gateway", () => {
   it("instructs the agent via PUT and maps the returned instruction", async () => {
     const { client, calls } = fakeHttpClient({
       put: {
-        id: "c1",
+        id: uuid.c1,
         title: "Sobre TDD",
         createdAt: "2026-05-25T10:00:00.000Z",
         instruction: "Fale como um pirata",

@@ -6,7 +6,6 @@ export type LiveSessionConfig = {
   token: string;
   model: string;
   history: LiveHistoryTurn[];
-  instruction?: string;
 };
 
 export type LiveSessionCallbacks = {

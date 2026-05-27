@@ -10,7 +10,7 @@ describe("ModelCatalogController", () => {
   it("shapes usable models under a models key matching the contract", async () => {
     const controller = buildController(
       new FakeModelCatalogProvider([
-        { id: "gemini-3.5-flash", label: "Flash", supportedActions: ["generateContent"] },
+        { id: "gemini-2.5-flash", label: "Flash", supportedActions: ["generateContent"] },
         { id: "text-embedding-004", label: "Embedding", supportedActions: ["embedContent"] },
       ]),
     );
@@ -18,7 +18,7 @@ describe("ModelCatalogController", () => {
     const dto = await controller.listModels();
 
     expect(dto).toEqual({
-      models: [{ id: "gemini-3.5-flash", label: "Flash", capabilities: ["text"], tier: "free" }],
+      models: [{ id: "gemini-2.5-flash", label: "Flash", capabilities: ["text"], tier: "free" }],
     });
   });
 

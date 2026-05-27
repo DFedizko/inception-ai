@@ -34,7 +34,11 @@ export interface HttpClient {
     config?: RequestConfig,
   ): Promise<TResponse>;
   delete<TResponse>(url: string, config?: RequestConfig): Promise<TResponse>;
-  stream(url: string, config?: StreamConfig): AsyncIterable<Uint8Array>;
+  stream(
+    url: string,
+    config: StreamConfig | undefined,
+    onChunk: (chunk: Uint8Array) => void,
+  ): Promise<void>;
 }
 
 export class HttpError extends Error {

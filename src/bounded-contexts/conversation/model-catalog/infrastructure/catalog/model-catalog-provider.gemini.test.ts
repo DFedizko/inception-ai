@@ -1,11 +1,19 @@
 import { describe, expect, it } from "bun:test";
 import { GeminiModelCatalogProvider, type GeminiModelsClient } from "./model-catalog-provider.gemini";
 
-const pageOf = async function* <T>(descriptors: T[]) {
-  for (const descriptor of descriptors) {
-    yield descriptor;
-  }
-};
+const pageOf = <T>(descriptors: T[]): AsyncIterable<T> => ({
+  [Symbol.asyncIterator]: () => {
+    let index = 0;
+    return {
+      next: () =>
+        Promise.resolve(
+          index < descriptors.length
+            ? { value: descriptors[index++], done: false }
+            : { value: undefined, done: true },
+        ),
+    };
+  },
+});
 
 describe("GeminiModelCatalogProvider", () => {
   it("strips the resource prefix, prefers the display name, and defaults actions", async () => {

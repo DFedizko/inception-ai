@@ -76,8 +76,8 @@ export class Conversation {
     return this.appendUserTurn(Message.userWith(modality, contents));
   }
 
-  recordAssistantReply(text: string, modality: Modality): Message {
-    return this.appendAssistantTurn(Message.fromAssistant(text, modality));
+  recordAssistantReply(text: string, modality: Modality, responseDurationMs?: number): Message {
+    return this.appendAssistantTurn(Message.fromAssistant(text, modality, responseDurationMs));
   }
 
   recordAssistantContent(modality: Modality, contents: Content[]): Message {

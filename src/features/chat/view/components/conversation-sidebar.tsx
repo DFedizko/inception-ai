@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect } from "react";
 import { Plus, MessageSquare, Sparkles } from "lucide-react";
 
 import { Sidebar, SidebarHeader, SidebarSection, SidebarItem } from "@/features/shared/ui";
@@ -10,11 +9,7 @@ import { ConversationListSkeleton } from "./conversation-list-skeleton";
 
 export const ConversationSidebar = () => {
   const { conversations, isLoadingConversations, activeConversationId } = useChatStore();
-  const { loadConversations, openConversation, startConversation } = useChatViewModel();
-
-  useEffect(() => {
-    loadConversations();
-  }, []);
+  const { openConversation, startConversation } = useChatViewModel();
 
   return (
     <Sidebar>
@@ -37,10 +32,10 @@ export const ConversationSidebar = () => {
         ) : (
           conversations.map((conversation) => (
             <SidebarItem
-              key={conversation.id}
+              key={conversation.id.value}
               icon={<MessageSquare className="size-4 shrink-0 text-ink-muted" />}
-              active={conversation.id === activeConversationId}
-              onClick={() => openConversation(conversation.id)}
+              active={conversation.id.value === activeConversationId}
+              onClick={() => openConversation(conversation.id.value)}
             >
               {labelOf(conversation.title)}
             </SidebarItem>
